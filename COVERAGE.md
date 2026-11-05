@@ -43,3 +43,4 @@ This matrix tracks the implementation and test status of every paper element and
 - `c1.utils.sha256_string`: SHA-256 string hashing for prompt/template hashing (SPEC §4, §5.1)
 - `c1.utils.write_run_meta`: Reproducibility metadata writer (SPEC §4, §15, §16)
 - `c1.cli.main`: CLI entry point with command stubs (SPEC §4)
+

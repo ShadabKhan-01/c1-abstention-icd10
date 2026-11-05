@@ -20,3 +20,4 @@ This project evaluates whether withholding low-confidence predictions from open-
 - `COVERAGE.md`: Coverage checklist mapping paper elements to code and outputs.
 - `ASSUMPTIONS.md`: Default resolutions of paper ambiguities (SPEC §17).
 - `QUESTIONS.md`: Tracked open questions.
+

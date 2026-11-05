@@ -587,3 +587,4 @@ def write_run_meta(
 
     write_json_atomic(out_path, meta)
     return meta
+
