@@ -167,3 +167,4 @@ def truncate_note(text: str, max_words: int = DEFAULT_MAX_NOTE_WORDS) -> tuple[s
         truncated = " ".join(words[:max_words])
         return truncated, True
     return text, False
+

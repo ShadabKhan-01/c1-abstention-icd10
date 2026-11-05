@@ -118,3 +118,4 @@ def test_s4_score_computation() -> None:
     # 0/0 fallback case returns 0.5
     assert compute_s4_score(0.0, 0.0) == 0.5
     assert compute_s4_score(1e-15, 1e-15) == 0.5
+

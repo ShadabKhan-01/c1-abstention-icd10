@@ -32,3 +32,4 @@ def test_coverage_matrix_traceability() -> None:
         full_mod = f"c1.{mod_name}"
         mod = importlib.import_module(full_mod)
         assert hasattr(mod, item_name), f"Expected {item_name} in {full_mod} per COVERAGE.md"
+

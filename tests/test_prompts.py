@@ -89,3 +89,4 @@ def test_compute_max_note_words() -> None:
     """Verify compute_max_note_words yields reasonable limits for BioMistral 2048."""
     max_w = compute_max_note_words(context_window=2048, max_new_tokens=200, reserve_tokens=250)
     assert 900 <= max_w <= 1300
+

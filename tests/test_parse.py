@@ -116,3 +116,4 @@ def test_parse_s2_output_formats() -> None:
     # Z99.999 was not in S2 output
     assert scores["Z99.999"] is None
     assert failed == ["Z99.999"]
+
