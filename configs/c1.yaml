@@ -1,0 +1,19 @@
+run_id: c1_run01
+paths: {data_dir: data, out_dir: outputs}        # out_dir will point to Google Drive on Colab
+corpus: {n_notes: 300, generator_seed: 2026}
+split: {dev_fraction: 0.30, seed: 2026}
+models:
+  llama3: {hf_id: meta-llama/Meta-Llama-3-8B-Instruct, context: 8192}
+  biomistral: {hf_id: BioMistral/BioMistral-7B, context: 2048}
+quantisation: {type: nf4, compute_dtype: float16, double_quant: true}
+decoding:
+  greedy: {do_sample: false, max_new_tokens: 200}
+  sample: {k: 10, temperature: 0.7, top_p: 0.95, max_new_tokens: 200, mode: batched, seed: 2026}
+s2: {max_new_tokens: 200}
+s4: {batch_size: 1}
+coverage_targets: [1.0, 0.9, 0.8, 0.7, 0.6]
+primary_target: 0.8
+random_control: {repeats: 100, seed: 7}
+bootstrap: {B: 1000, seed: 42, ci: 0.95}
+ece_bins: 10
+k_sensitivity: [3, 5, 10]
