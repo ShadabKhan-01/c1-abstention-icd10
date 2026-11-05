@@ -16,4 +16,6 @@ This document records ambiguities in the paper and the defaults adopted, as spec
 | A10 | Random control | pooled over the test set, 100 repeats, recomputed inside every bootstrap resample |
 | A11 | Realised vs target coverage | thresholds from dev; report realised test coverage; never re-tune |
 | A12 | Rare condition definition | Template conditions with weight <= 0.2 (bottom quartile) or explicit rare: true flag are assigned rare: true in generated corpus |
-
+| A13 | Shared note truncation limit | Default `DEFAULT_MAX_NOTE_WORDS = 1000` words (fits BioMistral 2048-token context window minus template and generation margins; SPEC §3) |
+| A14 | S2 unreadable score representation | Stored as `null` in `s2.jsonl` with code in `failed_codes`; mapped to `s2 = 0.0` and `s2_failed = True` in `codes.csv` (SPEC §4, §5.2) |
+| A15 | S4 zero probability fallback | If $P(\text{Yes}) + P(\text{No}) \le 10^{-12}$, S4 = 0.5 with warning log (SPEC §6) |

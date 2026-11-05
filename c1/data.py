@@ -369,3 +369,21 @@ def run_split_from_config(
     logger.info(f"Saved split to {split_file} ({len(split_df)} rows).")
     return split_file
 
+
+def load_split(split_path: str | Path) -> dict[str, str]:
+    """Load split.csv mapping note ID to split partition ('dev' or 'test').
+
+    Args:
+        split_path: Path to split.csv file.
+
+    Returns:
+        Dict mapping note ID string to partition string ('dev' or 'test').
+    """
+    path = Path(split_path)
+    if not path.is_file():
+        raise FileNotFoundError(f"Split file not found at {path}")
+
+    df = pd.read_csv(path)
+    return dict(zip(df["id"].astype(str), df["split"].astype(str)))
+
+

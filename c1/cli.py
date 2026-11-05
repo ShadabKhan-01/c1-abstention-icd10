@@ -1,17 +1,24 @@
 """Command-line interface for the C1 project.
 
 Provides CLI entry points for all pipeline stages.
-In Milestone M0, all stage commands are stubs that raise NotImplementedError
-with the milestone in which they will be implemented.
+Milestone M1: make-corpus, split, tables (Table II)
+Milestone M2: run (greedy, samples, s2, s4), selfcheck, estimate
+Milestone M3: build-codes
+Milestone M4: analyze
+Milestone M6: tables, figures, sanity, paper-numbers
 
-Traces to SPEC §4.
+Traces to SPEC §3, §4, §15, §16.
 """
 
 from __future__ import annotations
 
 import argparse
+import logging
+from pathlib import Path
 import sys
 from typing import Sequence
+
+logger = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -44,7 +51,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_selfcheck.add_argument("--config", default="configs/c1.yaml", help="Path to config")
     p_selfcheck.add_argument("--out", default=None, help="Output run directory")
-    p_selfcheck.add_argument("--model", required=False, help="Model to check (llama3 or biomistral)")
+    p_selfcheck.add_argument("--model", required=False, default="llama3", help="Model to check (llama3 or biomistral)")
+    p_selfcheck.add_argument("--backend", choices=["hf", "mock"], default="hf", help="Backend type (default: hf)")
 
     p_estimate = subparsers.add_parser(
         "estimate",
@@ -52,7 +60,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_estimate.add_argument("--config", default="configs/c1.yaml", help="Path to config")
     p_estimate.add_argument("--out", default=None, help="Output run directory")
-    p_estimate.add_argument("--model", required=False, help="Model to estimate")
+    p_estimate.add_argument("--model", required=False, default="llama3", help="Model to estimate")
+    p_estimate.add_argument("--backend", choices=["hf", "mock"], default="hf", help="Backend type (default: hf)")
+    p_estimate.add_argument("--sample-size", type=int, default=20, help="Number of notes to benchmark (default: 20)")
 
     p_run = subparsers.add_parser(
         "run",
@@ -60,7 +70,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_run.add_argument("--config", default="configs/c1.yaml", help="Path to config")
     p_run.add_argument("--out", default=None, help="Output run directory")
-    p_run.add_argument("--model", required=False, help="Model name")
+    p_run.add_argument("--model", required=False, default="llama3", help="Model name (llama3 or biomistral)")
+    p_run.add_argument("--backend", choices=["hf", "mock"], default="hf", help="Backend type (default: hf)")
     p_run.add_argument("--stages", default="greedy,samples,s2,s4", help="Comma-separated stage list")
     p_run.add_argument("--split", default=None, help="Optional split filter (e.g. dev)")
     p_run.add_argument("--limit", type=int, default=None, help="Limit number of notes")
@@ -116,17 +127,161 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _create_backend(config: Any, model_name: str, backend_type: str) -> Any:
+    """Instantiate and initialize backend."""
+    if backend_type == "mock":
+        from c1.backend import MockBackend
+        return MockBackend(model_name=model_name)
+
+    from c1.backend import HFBackend
+    if model_name not in config.models:
+        raise ValueError(f"Model '{model_name}' not configured in config.models ({list(config.models.keys())})")
+
+    model_cfg = config.models[model_name]
+    backend = HFBackend(
+        model_id=model_cfg.hf_id,
+        context_limit=model_cfg.context,
+        quant_type=config.quantisation.type,
+        compute_dtype=config.quantisation.compute_dtype,
+        double_quant=config.quantisation.double_quant,
+    )
+    backend.load()
+    return backend
+
+
+def _load_notes_and_vocab(config: Any, split_filter: str | None = None, limit: int | None = None) -> tuple[Any, list[Any]]:
+    """Load vocabulary and filtered notes."""
+    from c1.codes import Vocabulary
+    from c1.data import load_corpus, load_split
+
+    data_dir = Path(config.paths.data_dir)
+    vocab = Vocabulary.load_default()
+    corpus_file = data_dir / "corpus.jsonl"
+    notes = load_corpus(corpus_file, vocab)
+
+    if split_filter:
+        split_file = data_dir / "split.csv"
+        if not split_file.is_file():
+            split_file = Path(config.paths.out_dir) / config.run_id / "split.csv"
+        if split_file.is_file():
+            split_map = load_split(split_file)
+            notes = [n for n in notes if split_map.get(n.id) == split_filter]
+        else:
+            logger.warning("Split file %s not found; skipping split filter", split_file)
+
+    if limit is not None:
+        notes = notes[:limit]
+
+    return vocab, notes
+
+
+def run_pipeline_cli(args: argparse.Namespace) -> int:
+    """Handler for 'c1 run'."""
+    from c1.stages import (
+        get_stage_output_dir,
+        run_greedy_stage,
+        run_s2_stage,
+        run_s4_stage,
+        run_samples_stage,
+    )
+    from c1.utils import load_config, write_run_meta
+
+    config = load_config(args.config)
+    model_name = args.model
+    backend = _create_backend(config, model_name, args.backend)
+
+    try:
+        vocab, notes = _load_notes_and_vocab(config, split_filter=args.split, limit=args.limit)
+        out_dir = get_stage_output_dir(config, backend, args.out)
+
+        stages = [s.strip().lower() for s in args.stages.split(",") if s.strip()]
+
+        for stage in stages:
+            if stage == "greedy":
+                run_greedy_stage(config, model_name, backend, notes, out_dir)
+            elif stage in ("samples", "sample", "s1"):
+                run_samples_stage(config, model_name, backend, notes, out_dir)
+            elif stage == "s2":
+                run_s2_stage(config, model_name, backend, notes, out_dir)
+            elif stage == "s4":
+                run_s4_stage(config, model_name, backend, vocab, notes, out_dir)
+            else:
+                raise ValueError(f"Unknown stage '{stage}'. Must be one of greedy, samples, s2, s4.")
+
+        write_run_meta(out_dir, config, extra={"stages": stages, "model": model_name, "backend": backend.backend_name})
+        print(f"Completed stages {stages} for {model_name} in {out_dir}")
+        return 0
+    finally:
+        if hasattr(backend, "unload"):
+            backend.unload()
+
+
+def run_selfcheck_cli(args: argparse.Namespace) -> int:
+    """Handler for 'c1 selfcheck'."""
+    import json
+    from c1.stages import get_stage_output_dir, run_selfcheck
+    from c1.utils import load_config
+
+    config = load_config(args.config)
+    model_name = args.model
+    backend = _create_backend(config, model_name, args.backend)
+
+    try:
+        vocab, notes = _load_notes_and_vocab(config, split_filter="dev")
+        out_dir = get_stage_output_dir(config, backend, args.out)
+        report = run_selfcheck(config, model_name, backend, vocab, notes, out_dir)
+
+        print("\n=== Selfcheck Summary ===")
+        print(f"Model: {model_name} ({backend.backend_name})")
+        print(f"Environment: {report['environment']}")
+        det_pass = report['greedy_determinism']['passed']
+        print(f"Greedy Determinism: {'PASSED' if det_pass else 'FAILED'}")
+        s4_rate = report['s4_yes_no_check']['pass_rate'] * 100
+        print(f"S4 Top-1 Yes/No Rate: {s4_rate:.1f}% ({report['s4_yes_no_check']['top_is_yes_or_no_count']}/{report['s4_yes_no_check']['tested_pairs']})")
+        print(f"Detailed report saved to: {out_dir / 'selfcheck_report.json'}\n")
+        return 0
+    finally:
+        if hasattr(backend, "unload"):
+            backend.unload()
+
+
+def run_estimate_cli(args: argparse.Namespace) -> int:
+    """Handler for 'c1 estimate'."""
+    from c1.stages import run_estimate
+    from c1.utils import load_config
+
+    config = load_config(args.config)
+    model_name = args.model
+    backend = _create_backend(config, model_name, args.backend)
+
+    try:
+        vocab, notes = _load_notes_and_vocab(config, split_filter="dev")
+        res = run_estimate(config, model_name, backend, vocab, notes, sample_size=args.sample_size)
+
+        print("\n=== Runtime Estimation (SPEC §16) ===")
+        print(f"Model: {model_name} ({backend.backend_name})")
+        print(f"Benchmark sample: {res['sample_size']} dev notes")
+        print(f"Target corpus size: {res['target_notes']} notes")
+        print(f"  Greedy stage:  {res['t_greedy_sec']} s")
+        print(f"  Samples stage: {res['t_samples_sec']} s")
+        print(f"  S2 stage:      {res['t_s2_sec']} s")
+        print(f"  S4 stage:      {res['t_s4_sec']} s")
+        print(f"Total time for {res['sample_size']} notes: {res['t_total_sec']} s ({res['sec_per_note']} s/note)")
+        print(f"Projected total runtime for {res['target_notes']} notes: {res['projected_hours']:.2f} hours\n")
+        return 0
+    finally:
+        if hasattr(backend, "unload"):
+            backend.unload()
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    """CLI entry point dispatching to pipeline stage stubs.
+    """CLI entry point dispatching to pipeline stage handlers.
 
     Args:
         argv: Command-line arguments. If None, sys.argv[1:] is used.
 
     Returns:
         Exit code integer.
-
-    Raises:
-        NotImplementedError: For all stage commands until implemented in their respective milestones.
     """
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -153,10 +308,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         raise NotImplementedError(f"Table {args.table} is not implemented in Milestone M1.")
 
+    if args.command == "run":
+        return run_pipeline_cli(args)
+
+    if args.command == "selfcheck":
+        return run_selfcheck_cli(args)
+
+    if args.command == "estimate":
+        return run_estimate_cli(args)
+
     stubs: dict[str, str] = {
-        "selfcheck": "Milestone M2",
-        "estimate": "Milestone M2",
-        "run": "Milestone M2",
         "build-codes": "Milestone M3",
         "analyze": "Milestone M4",
         "figures": "Milestone M6",
@@ -173,4 +334,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

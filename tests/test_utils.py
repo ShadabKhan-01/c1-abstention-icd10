@@ -294,9 +294,6 @@ def test_cli_subparsers_list_all_commands() -> None:
 def test_cli_stubs_raise_not_implemented() -> None:
     """Verify that unimplemented CLI commands raise NotImplementedError with their milestone."""
     stubs = {
-        "selfcheck": "Milestone M2",
-        "estimate": "Milestone M2",
-        "run": "Milestone M2",
         "build-codes": "Milestone M3",
         "analyze": "Milestone M4",
         "figures": "Milestone M6",
