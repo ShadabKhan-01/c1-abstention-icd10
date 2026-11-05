@@ -12,8 +12,8 @@ This matrix tracks the implementation and test status of every paper element and
 | [x] | S1 sampling | 6, 12 | `c1/backend.py`, `c1/stages.py` | `generate_samples`, `run_samples_stage` | `samples.jsonl` | M2 |
 | [x] | S2 verbalised | 5, 6 | `c1/prompts.py`, `c1/parse.py`, `c1/stages.py` | `format_s2_prompt`, `parse_s2_output`, `run_s2_stage` | `s2.jsonl` | M2 |
 | [x] | S4 yes/no | 6 | `c1/prompts.py`, `c1/backend.py`, `c1/stages.py` | `format_s4_prompt`, `compute_s4_score`, `run_s4_stage` | `s4.jsonl` | M2 |
-| [ ] | S5 | 6 | `signals.py` | — | `codes.csv` | M3 |
-| [ ] | Labels correct/invalid/unsupported | 5.3 | `label.py` | — | `codes.csv` | M3 |
+| [x] | S5 | 6 | `c1/signals.py`, `c1/stages.py` | `compute_s5`, `build_codes_stage` | `codes.csv` | M3 |
+| [x] | Labels correct/invalid/unsupported | 5.3 | `c1/label.py`, `c1/stages.py` | `label_code`, `label_note_codes`, `build_codes_stage` | `codes.csv` | M3 |
 | [ ] | Table I (definitions) | — | text only | — | — | — |
 | [ ] | AUROC, ECE; Table III; Fig. 2 | 7, 14 | `metrics.py`, `figures.py` | — | `metrics_signals.csv` | M4 |
 | [ ] | Thresholds (dev) | 8 | `thresholds.py` | — | `thresholds.json` | M4 |
@@ -91,3 +91,17 @@ This matrix tracks the implementation and test status of every paper element and
 - `c1.cli.run_pipeline_cli`: CLI handler for `c1 run` (SPEC §4)
 - `c1.cli.run_selfcheck_cli`: CLI handler for `c1 selfcheck` (SPEC §3, §15)
 - `c1.cli.run_estimate_cli`: CLI handler for `c1 estimate` (SPEC §16)
+
+## Milestone M3 Implemented Functions Traceability
+
+- `c1.label.CodeLabel`: Dataclass container for code correctness category, cause tag, and gold metadata (SPEC §4, §5.3)
+- `c1.label.label_code`: Evaluates code validity, gold set membership, mutually exclusive classification (correct/invalid/unsupported), distractor cause tag priority ('negated' > 'family_history' > 'distractor_medication' > 'other'), and gold type/rare retrieval (SPEC §5.3)
+- `c1.label.label_note_codes`: Batch labelling helper for a sequence of predicted codes (SPEC §5.3)
+- `c1.signals.compute_s1`: Sampling agreement across k samples with prefix support for Table VIII k-sensitivity (SPEC §6, §12)
+- `c1.signals.extract_s2`: Extracts normalized verbalized scores and handles missing score failure mapping (S2 = 0.0, s2_failed = True) (SPEC §5.2, §6)
+- `c1.signals.compute_s3_from_greedy`: Computes S3 mean token probability over character spans via monotonic token alignment (SPEC §6, §15)
+- `c1.signals.extract_s4`: Extracts normalized verification probability with 0/0 fallback to 0.5 (SPEC §6)
+- `c1.signals.compute_s5`: Composite signal mean (S1 + S4) / 2 (SPEC §6)
+- `c1.stages.build_codes_stage`: Stage runner joining stage outputs with corpus and vocabulary to produce codes.csv and logging s3_post costs (SPEC §4, §12)
+- `c1.cli.run_build_codes_cli`: CLI handler for c1 build-codes (SPEC §4)
+

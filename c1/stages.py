@@ -12,12 +12,13 @@ Traces to SPEC §3, §4, §5.1, §5.2, §6, §15, §16.
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import logging
 from pathlib import Path
 import time
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 from c1.backend import (
     BaseBackend,
@@ -27,6 +28,7 @@ from c1.backend import (
 )
 from c1.codes import Vocabulary
 from c1.data import Note, load_corpus, load_split
+from c1.label import label_code
 from c1.parse import parse_greedy_output, parse_s2_output
 from c1.prompts import (
     DEFAULT_MAX_NOTE_WORDS,
@@ -36,10 +38,18 @@ from c1.prompts import (
     format_s4_prompt,
     truncate_note,
 )
+from c1.signals import (
+    compute_s1,
+    compute_s3_from_greedy,
+    compute_s5,
+    extract_s2,
+    extract_s4,
+)
 from c1.utils import (
     Config,
     append_jsonl,
     read_jsonl_resume,
+    write_csv_atomic,
     write_json_atomic,
     write_run_meta,
 )
@@ -755,4 +765,176 @@ def run_estimate(
         "projected_hours": round(projected_hours, 2),
     }
     return res
+
+
+# ---------------------------------------------------------------------------
+# Stage 5: Build Codes (codes.csv, SPEC §4)
+# ---------------------------------------------------------------------------
+
+CODES_CSV_COLUMNS: list[str] = [
+    "model",
+    "id",
+    "split",
+    "code",
+    "position",
+    "correct",
+    "invalid",
+    "unsupported",
+    "cause_tag",
+    "gold_type",
+    "gold_rare",
+    "s1",
+    "s2",
+    "s3",
+    "s4",
+    "s5",
+    "s2_failed",
+]
+
+
+def build_codes_stage(
+    config: Config,
+    model_name: str,
+    out_dir: Path,
+    vocab: Vocabulary,
+    notes: Sequence[Note],
+    split_map: dict[str, str],
+    decode_fn: Callable[[Sequence[int]], str] | None = None,
+) -> tuple[Path, dict[str, Any]]:
+    """Join stage outputs, ground truth labels, and confidence signals into codes.csv.
+
+    Schema per SPEC §4:
+    model, id, split, code, position, correct, invalid, unsupported, cause_tag,
+    gold_type, gold_rare, s1, s2, s3, s4, s5, s2_failed
+
+    Also records s3_post execution time in cost_log.jsonl (SPEC §4, §12).
+    """
+    greedy_file = out_dir / "greedy.jsonl"
+    samples_file = out_dir / "samples.jsonl"
+    s2_file = out_dir / "s2.jsonl"
+    s4_file = out_dir / "s4.jsonl"
+    cost_file = out_dir / "cost_log.jsonl"
+    codes_file = out_dir / "codes.csv"
+
+    for req_file in (greedy_file, samples_file, s2_file, s4_file):
+        if not req_file.is_file():
+            raise FileNotFoundError(
+                f"Required stage file {req_file.name} not found in {out_dir}. "
+                "Run generation stages first."
+            )
+
+    greedy_records = read_jsonl_resume(greedy_file)
+    samples_records = read_jsonl_resume(samples_file)
+    s2_records = read_jsonl_resume(s2_file)
+    s4_records = read_jsonl_resume(s4_file)
+
+    greedy_map = {r["id"]: r for r in greedy_records if r.get("model") == model_name and "id" in r}
+    samples_map = {r["id"]: r for r in samples_records if r.get("model") == model_name and "id" in r}
+    s2_map = {r["id"]: r for r in s2_records if r.get("model") == model_name and "id" in r}
+    s4_map = {r["id"]: r for r in s4_records if r.get("model") == model_name and "id" in r}
+
+    logger.info("Building codes.csv for %s across %d notes", model_name, len(notes))
+
+    # Preserve rows for other models if codes.csv already exists
+    existing_other_rows: list[dict[str, Any]] = []
+    if codes_file.is_file():
+        with open(codes_file, "r", encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if row.get("model") != model_name:
+                    existing_other_rows.append(row)
+
+    new_rows: list[dict[str, Any]] = []
+    total_s3_time = 0.0
+
+    # Process notes sorted by ID (SPEC §4)
+    sorted_notes = sorted(notes, key=lambda n: n.id)
+
+    for note in sorted_notes:
+        if note.id not in greedy_map:
+            continue
+
+        greedy_rec = greedy_map[note.id]
+        samples_rec = samples_map.get(note.id)
+        s2_rec = s2_map.get(note.id)
+        s4_rec = s4_map.get(note.id)
+
+        pred_codes = greedy_rec.get("pred", [])
+        note_split = split_map.get(note.id, "dev")
+
+        sample_runs = samples_rec.get("runs", []) if samples_rec else []
+
+        start_s3_post = time.perf_counter()
+
+        for position, code in enumerate(pred_codes, start=1):
+            lbl = label_code(code, note, vocab)
+            s1_val = compute_s1(sample_runs, code)
+            s2_val, s2_failed = extract_s2(s2_rec, code)
+            s3_val = compute_s3_from_greedy(greedy_rec, code, decode_fn)
+            s4_val = extract_s4(s4_rec, code)
+            s5_val = compute_s5(s1_val, s4_val)
+
+            new_rows.append(
+                {
+                    "model": model_name,
+                    "id": note.id,
+                    "split": note_split,
+                    "code": code,
+                    "position": position,
+                    "correct": lbl.correct,
+                    "invalid": lbl.invalid,
+                    "unsupported": lbl.unsupported,
+                    "cause_tag": lbl.cause_tag,
+                    "gold_type": lbl.gold_type,
+                    "gold_rare": lbl.gold_rare,
+                    "s1": round(s1_val, 6),
+                    "s2": round(s2_val, 6),
+                    "s3": round(s3_val, 6),
+                    "s4": round(s4_val, 6),
+                    "s5": round(s5_val, 6),
+                    "s2_failed": s2_failed,
+                }
+            )
+
+        elapsed_s3_post = time.perf_counter() - start_s3_post
+        total_s3_time += elapsed_s3_post
+
+        append_cost_record(
+            cost_file=cost_file,
+            model_name=model_name,
+            note_id=note.id,
+            stage="s3_post",
+            logical_calls=0,
+            prompt_tokens=0,
+            gen_tokens=0,
+            seconds=elapsed_s3_post,
+        )
+
+    all_rows = existing_other_rows + new_rows
+    # Sort deterministically by (model, id, position)
+    all_rows.sort(key=lambda r: (r["model"], r["id"], int(r["position"])))
+
+    write_csv_atomic(codes_file, all_rows, fieldnames=CODES_CSV_COLUMNS)
+
+    n_codes = len(new_rows)
+    stats: dict[str, Any] = {
+        "model": model_name,
+        "n_notes_processed": len([n for n in sorted_notes if n.id in greedy_map]),
+        "total_predicted_codes": n_codes,
+        "correct_count": sum(1 for r in new_rows if r["correct"]),
+        "invalid_count": sum(1 for r in new_rows if r["invalid"]),
+        "unsupported_count": sum(1 for r in new_rows if r["unsupported"]),
+        "s2_failed_count": sum(1 for r in new_rows if r["s2_failed"]),
+        "s2_failure_rate": round(sum(1 for r in new_rows if r["s2_failed"]) / max(n_codes, 1), 4),
+        "mean_s1": round(sum(r["s1"] for r in new_rows) / max(n_codes, 1), 4) if n_codes else 0.0,
+        "mean_s2": round(sum(r["s2"] for r in new_rows) / max(n_codes, 1), 4) if n_codes else 0.0,
+        "mean_s3": round(sum(r["s3"] for r in new_rows) / max(n_codes, 1), 4) if n_codes else 0.0,
+        "mean_s4": round(sum(r["s4"] for r in new_rows) / max(n_codes, 1), 4) if n_codes else 0.0,
+        "mean_s5": round(sum(r["s5"] for r in new_rows) / max(n_codes, 1), 4) if n_codes else 0.0,
+        "total_s3_post_seconds": round(total_s3_time, 4),
+    }
+
+    logger.info("Successfully built codes.csv at %s (%d rows)", codes_file, len(all_rows))
+    return codes_file, stats
+
 

@@ -83,7 +83,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_build_codes.add_argument("--config", default="configs/c1.yaml", help="Path to config")
     p_build_codes.add_argument("--out", default=None, help="Output run directory")
-    p_build_codes.add_argument("--model", required=False, help="Model name")
+    p_build_codes.add_argument("--model", required=False, default="llama3", help="Model name (llama3 or biomistral)")
+    p_build_codes.add_argument("--backend", choices=["hf", "mock"], default="hf", help="Backend type (default: hf)")
 
     # Milestone M4 / M5 commands
     p_analyze = subparsers.add_parser(
@@ -274,6 +275,57 @@ def run_estimate_cli(args: argparse.Namespace) -> int:
             backend.unload()
 
 
+def run_build_codes_cli(args: argparse.Namespace) -> int:
+    """Handler for 'c1 build-codes'."""
+    from c1.codes import Vocabulary
+    from c1.data import load_corpus, load_split
+    from c1.stages import build_codes_stage, get_stage_output_dir
+    from c1.utils import load_config, write_run_meta
+
+    config = load_config(args.config)
+    model_name = args.model or "llama3"
+    backend = _create_backend(config, model_name, args.backend)
+
+    try:
+        data_dir = Path(config.paths.data_dir)
+        vocab = Vocabulary.load_default()
+        notes = load_corpus(data_dir / "corpus.jsonl", vocab)
+
+        split_file = data_dir / "split.csv"
+        if not split_file.is_file():
+            split_file = Path(config.paths.out_dir) / config.run_id / "split.csv"
+        split_map = load_split(split_file) if split_file.is_file() else {}
+
+        out_dir = get_stage_output_dir(config, backend, args.out)
+
+        decode_fn = backend.decode_tokens if hasattr(backend, "decode_tokens") else None
+        codes_file, stats = build_codes_stage(
+            config=config,
+            model_name=model_name,
+            out_dir=out_dir,
+            vocab=vocab,
+            notes=notes,
+            split_map=split_map,
+            decode_fn=decode_fn,
+        )
+
+        write_run_meta(out_dir, config, extra={"command": "build-codes", "model": model_name, "backend": backend.backend_name})
+
+        print(f"\n=== Build Codes Summary ({model_name}) ===")
+        print(f"Notes Processed: {stats['n_notes_processed']}")
+        print(f"Total Predicted Codes: {stats['total_predicted_codes']}")
+        print(f"  Correct:     {stats['correct_count']} ({stats['correct_count'] / max(stats['total_predicted_codes'], 1) * 100:.1f}%)")
+        print(f"  Invalid:     {stats['invalid_count']} ({stats['invalid_count'] / max(stats['total_predicted_codes'], 1) * 100:.1f}%)")
+        print(f"  Unsupported: {stats['unsupported_count']} ({stats['unsupported_count'] / max(stats['total_predicted_codes'], 1) * 100:.1f}%)")
+        print(f"S2 Failure Rate: {stats['s2_failure_rate'] * 100:.1f}% ({stats['s2_failed_count']}/{stats['total_predicted_codes']})")
+        print(f"Mean Scores: S1={stats['mean_s1']:.3f}, S2={stats['mean_s2']:.3f}, S3={stats['mean_s3']:.3f}, S4={stats['mean_s4']:.3f}, S5={stats['mean_s5']:.3f}")
+        print(f"Saved: {codes_file}\n")
+        return 0
+    finally:
+        if hasattr(backend, "unload"):
+            backend.unload()
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point dispatching to pipeline stage handlers.
 
@@ -317,8 +369,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "estimate":
         return run_estimate_cli(args)
 
+    if args.command == "build-codes":
+        return run_build_codes_cli(args)
+
     stubs: dict[str, str] = {
-        "build-codes": "Milestone M3",
         "analyze": "Milestone M4",
         "figures": "Milestone M6",
         "sanity": "Milestone M6",
