@@ -155,3 +155,4 @@ class Vocabulary:
 
     def __contains__(self, code: str) -> bool:
         return self.is_valid(code)
+

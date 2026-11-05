@@ -8,3 +8,4 @@ from __future__ import annotations
 from c1.codes import is_well_formed, normalize
 
 __all__ = ["normalize", "is_well_formed"]
+

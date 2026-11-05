@@ -212,3 +212,4 @@ def run_table_ii_from_config(
         out_dir=out_dir,
         config=cfg,
     )
+

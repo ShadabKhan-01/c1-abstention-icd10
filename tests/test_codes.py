@@ -116,3 +116,4 @@ def test_vocabulary_file_not_found(tmp_path: Path) -> None:
     """Verify FileNotFoundError on missing file."""
     with pytest.raises(FileNotFoundError):
         Vocabulary.from_file(tmp_path / "nonexistent.jsonl")
+
