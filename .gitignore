@@ -1,0 +1,53 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---- Virtual environments ----
+.venv/
+venv/
+env/
+
+# ---- Secrets (never commit) ----
+.env
+.env.*
+*.token
+secrets*.json
+credentials*.json
+
+# ---- Data: ignore everything under data/ EXCEPT the public vocabulary ----
+data/*
+!data/vocab/
+!data/vocab/**
+
+# ---- Run outputs (live on Google Drive; local mock runs stay local) ----
+outputs/
+outputs_mock/
+reports/
+*_smoke/
+results*/
+
+# ---- Model weights and caches ----
+hf_cache/
+.cache/
+*.safetensors
+*.bin
+*.gguf
+*.pt
+*.pth
+*.ckpt
+
+# ---- Notebooks ----
+.ipynb_checkpoints/
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
