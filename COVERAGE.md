@@ -6,8 +6,8 @@ This matrix tracks the implementation and test status of every paper element and
 
 | Status | Paper element | Spec § | Module | Functions / Artifacts | Output | Milestone |
 |:---:|---|---|---|---|---|:---:|
-| [ ] | Corpus, split, dev/test | 1, 4 | `data.py` | — | `corpus.jsonl`, `split.csv` | M1 |
-| [ ] | Table II | 14 | `data.py`, `tables.py` | — | `table_II` | M1 |
+| [x] | Corpus, split, dev/test | 1, 4 | `c1/data.py` | `load_corpus`, `split_corpus`, `compute_corpus_stats`, `make_corpus_from_config`, `run_split_from_config` | `corpus.jsonl`, `split.csv`, `corpus_stats.json` | M1 |
+| [x] | Table II | 14 | `c1/data.py`, `c1/tables.py` | `generate_table_ii`, `run_table_ii_from_config` | `reports/table_II.md`, `reports/table_II.csv` | M1 |
 | [ ] | Greedy lists + parse + S3 | 3, 5, 6 | `backend.py`, `parse.py`, `signals.py` | — | `greedy.jsonl` | M2 |
 | [ ] | S1 sampling | 6, 12 | `backend.py`, `signals.py` | — | `samples.jsonl` | M2 |
 | [ ] | S2 verbalised | 5, 6 | `prompts.py`, `signals.py` | — | `s2.jsonl` | M2 |
@@ -43,4 +43,23 @@ This matrix tracks the implementation and test status of every paper element and
 - `c1.utils.sha256_string`: SHA-256 string hashing for prompt/template hashing (SPEC §4, §5.1)
 - `c1.utils.write_run_meta`: Reproducibility metadata writer (SPEC §4, §15, §16)
 - `c1.cli.main`: CLI entry point with command stubs (SPEC §4)
+
+## Milestone M1 Implemented Functions Traceability
+
+- `c1.codes.normalize`: Canonical code normalization with uppercase and 3rd-character dot insertion (SPEC §1.2)
+- `c1.codes.is_well_formed`: Well-formed pattern validation regex `^[A-TV-Z][0-9][0-9AB](\.[0-9A-TV-Z]{1,4})?$` (SPEC §1.2)
+- `c1.codes.Vocabulary`: Vocabulary lookup, description, and validity wrapper over pinned CDC 2024 release (SPEC §1.2)
+- `vendor.codes`: Shim module forwarding `normalize` and `is_well_formed` to `c1.codes` (SPEC §1.3)
+- `vendor.synth_data.generate_record`: Minimal patch emitting structured `gold` with `type` and `rare`, and `distractors` with `kind` (SPEC §1.1, §1.3)
+- `vendor.synth_data.generate_corpus`: Unpartitioned corpus generation wrapper (SPEC §1.1, §4)
+- `c1.data.GoldCode`, `Distractor`, `Note`: Pydantic schema validation for corpus records (SPEC §1.1)
+- `c1.data.compute_note_features`: Note-level non-exclusive feature flags (implicit, explicit, negation, family_history, distractor_medication, rare) (SPEC §11)
+- `c1.data.load_corpus`: Strict corpus loader enforcing the four hard checks of SPEC §1.1 (IDs unique, gold codes valid, no distractor in gold, implicit codes not named) (SPEC §1.1)
+- `c1.data.split_corpus`: Deterministic seeded 30/70 dev/test split via seeded permutation (SPEC §2, §4, §15)
+- `c1.data.compute_corpus_stats`: Corpus summary statistics (SPEC §4)
+- `c1.data.make_corpus_from_config`: Generation orchestrator producing `corpus.jsonl` and `corpus_stats.json` (SPEC §4)
+- `c1.data.run_split_from_config`: Split runner producing `split.csv` (SPEC §4)
+- `c1.tables.generate_table_ii`: Table II producer rendering Markdown and CSV reports with SPEC §14 formatting (SPEC §14)
+- `c1.tables.run_table_ii_from_config`: CLI handler for Table II generation (SPEC §14)
+
 

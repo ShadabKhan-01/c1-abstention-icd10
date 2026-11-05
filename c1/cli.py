@@ -85,10 +85,11 @@ def build_parser() -> argparse.ArgumentParser:
     # Milestone M6 commands
     p_tables = subparsers.add_parser(
         "tables",
-        help="Generate paper Tables II through IX and IV(c) (Milestone M6)",
+        help="Generate paper Tables II through IX and IV(c) (Milestone M1 for Table II, M6 for all)",
     )
     p_tables.add_argument("--config", default="configs/c1.yaml", help="Path to config")
     p_tables.add_argument("--out", default=None, help="Output run directory")
+    p_tables.add_argument("--table", default="all", help="Specific table to render (e.g. II or all)")
 
     p_figures = subparsers.add_parser(
         "figures",
@@ -134,15 +135,30 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.print_help()
         return 0
 
+    if args.command == "make-corpus":
+        from c1.data import make_corpus_from_config
+        make_corpus_from_config(args.config, args.out)
+        return 0
+
+    if args.command == "split":
+        from c1.data import run_split_from_config
+        run_split_from_config(args.config, args.out)
+        return 0
+
+    if args.command == "tables":
+        if args.table in ("II", "all"):
+            from c1.tables import run_table_ii_from_config
+            md_str, _ = run_table_ii_from_config(args.config, args.out)
+            print(md_str)
+            return 0
+        raise NotImplementedError(f"Table {args.table} is not implemented in Milestone M1.")
+
     stubs: dict[str, str] = {
-        "make-corpus": "Milestone M1",
-        "split": "Milestone M1",
         "selfcheck": "Milestone M2",
         "estimate": "Milestone M2",
         "run": "Milestone M2",
         "build-codes": "Milestone M3",
         "analyze": "Milestone M4",
-        "tables": "Milestone M6",
         "figures": "Milestone M6",
         "sanity": "Milestone M6",
         "paper-numbers": "Milestone M6",

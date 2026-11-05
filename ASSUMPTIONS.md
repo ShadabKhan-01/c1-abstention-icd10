@@ -15,4 +15,5 @@ This document records ambiguities in the paper and the defaults adopted, as spec
 | A9 | Valid code definition | same vocabulary object and definition as the earlier paper |
 | A10 | Random control | pooled over the test set, 100 repeats, recomputed inside every bootstrap resample |
 | A11 | Realised vs target coverage | thresholds from dev; report realised test coverage; never re-tune |
+| A12 | Rare condition definition | Template conditions with weight <= 0.2 (bottom quartile) or explicit rare: true flag are assigned rare: true in generated corpus |
 

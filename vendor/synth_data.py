@@ -75,9 +75,19 @@ def generate_record(record_id, conditions, all_codes_list, vocab, implicit_rate,
     distractor_conds = random.sample(distractor_candidates, min(n_distractors, len(distractor_candidates)))
 
     distractor_text_parts = []
+    distractor_objs = []
+    kind_map = {
+        'negation': 'negated',
+        'family': 'family_history',
+        'med': 'distractor_medication',
+    }
+
     for c in distractor_conds:
         dtype = random.choice(['negation', 'family', 'med'])
-        distractors.append(c['code'])
+        distractor_objs.append({
+            "code": normalize(c['code']),
+            "kind": kind_map[dtype],
+        })
         if dtype == 'negation' and c.get('negation_phrases'):
             distractor_text_parts.append(random.choice(c['negation_phrases']))
         elif dtype == 'family' and c.get('family_history_phrases'):
@@ -140,24 +150,77 @@ def generate_record(record_id, conditions, all_codes_list, vocab, implicit_rate,
             raise ValueError(f"Implicit code {c['code']} appeared explicitly in text!")
 
     # No gold code is distractor
-    overlap = set(gold_codes).intersection(set(distractors))
+    overlap = set(gold_codes).intersection({d["code"] for d in distractor_objs})
     if overlap:
         raise ValueError(f"Gold codes and distractors overlap: {overlap}")
 
-    for gc in gold_codes:
-        if not vocab.is_valid(gc):
-            raise ValueError(f"Gold code {gc} is invalid!")
+    gold = []
+    for c in selected_conditions:
+        norm_code = normalize(c['code'])
+        if not vocab.is_valid(norm_code):
+            raise ValueError(f"Gold code {norm_code} is invalid!")
+        is_imp = c['code'] in implicit_codes
+        is_rare = bool(c.get('rare', c.get('weight', 1.0) <= 0.2))
+        gold.append({
+            "code": norm_code,
+            "type": "implicit" if is_imp else "explicit",
+            "rare": is_rare,
+        })
 
     return {
-        "id": f"rec_{record_id:05d}",
+        "id": f"n{record_id:04d}",
         "text": text,
-        "medications": medications,
-        "gold_codes": gold_codes,
-        "implicit_codes": implicit_codes,
-        "explicit_codes": explicit_codes,
-        "distractors": distractors,
-        "n_words": n_words
+        "gold": gold,
+        "distractors": distractor_objs,
     }
+
+def generate_corpus(
+    n_notes: int,
+    seed: int,
+    out_file: str | Path,
+    conditions_path: str | Path = "vendor/templates/conditions.yaml",
+    vocab: Vocabulary | None = None,
+    implicit_rate: float = 0.45,
+    max_words: int = 200,
+) -> list[dict]:
+    """Generate unpartitioned corpus according to SPEC §1.1."""
+    random.seed(seed)
+    if vocab is None:
+        vocab = Vocabulary.load_or_download({})
+    conditions = load_conditions(conditions_path)
+
+    for c in conditions:
+        if not vocab.is_valid(c['code']):
+            raise ValueError(f"Template code {c['code']} is invalid in vocabulary!")
+
+    records = []
+    text_hashes = set()
+    all_codes = [c['code'] for c in conditions]
+
+    attempts = 0
+    max_attempts = n_notes * 20
+    while len(records) < n_notes and attempts < max_attempts:
+        attempts += 1
+        try:
+            rec = generate_record(len(records) + 1, conditions, all_codes, vocab, implicit_rate, max_words)
+            thash = hashlib.md5(rec['text'].encode()).hexdigest()
+            if thash in text_hashes:
+                continue
+            text_hashes.add(thash)
+            records.append(rec)
+        except Exception as e:
+            logger.debug(f"Skipped record due to error: {e}")
+
+    if len(records) < n_notes:
+        raise RuntimeError(f"Could only generate {len(records)} unique records of requested {n_notes}.")
+
+    out_p = Path(out_file)
+    out_p.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_p, "w", encoding="utf-8") as f:
+        for r in records:
+            f.write(json.dumps(r) + "\n")
+
+    return records
 
 def main():
     parser = argparse.ArgumentParser()
