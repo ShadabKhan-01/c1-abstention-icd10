@@ -18,11 +18,11 @@ This matrix tracks the implementation and test status of every paper element and
 | [x] | AUROC, ECE; Table III; Fig. 2 | 7, 14 | `c1/metrics.py`, `c1/stages.py` | `compute_auroc`, `compute_ece`, `run_analyze_stage` | `metrics_signals.csv` | M4 |
 | [x] | Thresholds (dev) | 8 | `c1/thresholds.py`, `c1/stages.py` | `pick_tau`, `compute_dev_thresholds`, `save_thresholds` | `thresholds.json` | M4 |
 | [x] | Table IV(a)(b)(c); Fig. 1 | 7–9, 14 | `c1/metrics.py`, `c1/controls.py`, `c1/stages.py` | `compute_kept_metrics`, `run_random_control`, `run_oracle_control`, `run_analyze_stage` | `results_test.csv`, `results_controls.csv` | M4 |
-| [ ] | Table V + verdict + recommendation | 10 | `bootstrap.py` | — | `bootstrap.csv`, `recommendation.csv` | M5 |
-| [ ] | Table VI + confident mistakes | 11 | `breakdown.py` | — | `by_feature.csv`, `confident_mistakes.csv` | M5 |
-| [ ] | Table VII cost | 12 | `cost.py`, `c1/stages.py` | `append_cost_record` | `cost.csv`, `cost_log.jsonl` | M5 |
-| [ ] | Table VIII k-sensitivity | 12 | `signals.py` | — | `k_sens.csv` | M5 |
-| [ ] | Table IX hypotheses H1–H5 | 13 | `hypotheses.py` | — | `hypotheses.csv` | M5 |
+| [x] | Table V + verdict + recommendation | 10 | `c1/bootstrap.py`, `c1/stages.py` | `run_model_bootstrap`, `evaluate_verdict`, `evaluate_recommendation`, `run_analyze_stage` | `bootstrap.csv`, `recommendation.csv` | M5 |
+| [x] | Table VI + confident mistakes | 11 | `c1/breakdown.py`, `c1/stages.py` | `compute_breakdown_by_feature`, `extract_confident_mistakes`, `run_analyze_stage` | `by_feature.csv`, `confident_mistakes.csv` | M5 |
+| [x] | Table VII cost | 12 | `c1/cost.py`, `c1/stages.py` | `compute_cost_table`, `append_cost_record`, `run_analyze_stage` | `cost.csv`, `cost_log.jsonl` | M5 |
+| [x] | Table VIII k-sensitivity | 12 | `c1/signals.py`, `c1/stages.py` | `compute_k_sensitivity`, `run_analyze_stage` | `k_sens.csv` | M5 |
+| [x] | Table IX hypotheses H1–H5 | 13 | `c1/hypotheses.py`, `c1/stages.py` | `evaluate_model_hypotheses`, `classify_h1`, `classify_h2`, `classify_h3`, `classify_h4`, `classify_h5`, `run_analyze_stage` | `hypotheses.csv` | M5 |
 | [x] | Selfcheck (S3 alignment, S4 token check, determinism) | 3 | `c1/backend.py`, `c1/stages.py`, `c1/cli.py` | `run_selfcheck`, `run_selfcheck_cli` | `selfcheck_report.json` | M2 |
 | [x] | Time estimate | 16 | `c1/stages.py`, `c1/cli.py` | `run_estimate`, `run_estimate_cli` | printed | M2 |
 | [ ] | Sanity checks | 15 | `sanity.py` | — | `sanity_report.json` | M6 |
@@ -117,7 +117,24 @@ This matrix tracks the implementation and test status of every paper element and
 - `c1.thresholds.load_thresholds`: Reads and parses thresholds.json (SPEC §8)
 - `c1.controls.run_random_control`: Vectorized random withholding across 100 repeats (SPEC §9, §15)
 - `c1.controls.run_oracle_control`: Deterministic oracle control keeping correct codes first (SPEC §9, §15)
-- `c1.stages.run_analyze_stage`: Orchestrator writing thresholds.json, metrics_signals.csv, results_test.csv, results_controls.csv (SPEC §4)
+- `c1.stages.run_analyze_stage`: Orchestrator writing all 11 analysis files (SPEC §4)
 - `c1.cli.run_analyze_cli`: CLI handler for c1 analyze (SPEC §4)
+
+## Milestone M5 Implemented Functions Traceability
+
+- `c1.bootstrap.evaluate_verdict`: Pre-defined 3-condition verdict rule evaluating delta precision CI > 0, delta UCR CI < 0, and observed delta ICR <= 0 (SPEC §10)
+- `c1.bootstrap.evaluate_recommendation`: Recommendation rule picking cheapest useful signal unless higher AUROC signal interval strictly dominates (SPEC §10, paper §4.4)
+- `c1.bootstrap.run_model_bootstrap`: Note-level bootstrap resampling test notes with replacement (B=1000) with multiplicity weighting, recomputing paired 100-repeat random control (SPEC §10, §15)
+- `c1.breakdown.compute_breakdown_by_feature`: Non-exclusive note strata evaluation using best signal at primary target with 'all notes' reconciliation row (SPEC §11, Table VI)
+- `c1.breakdown.extract_confident_mistakes`: Wrong test codes kept by best signal at primary target, sorted by score, with top-5 note text truncated to 600 characters per cause tag (SPEC §11)
+- `c1.cost.compute_cost_table`: Table VII cost aggregator computing per-note mean extra logical calls, physical calls, tokens, wall-clock seconds, and GPU device name (SPEC §12, Table VII)
+- `c1.signals.compute_k_sensitivity`: Table VIII k-sensitivity recomputing S1 dev AUROC and extra calls per note on dev split for k in {3, 5, 10} without new LLM calls (SPEC §12, Table VIII)
+- `c1.hypotheses.classify_h1`: Classifier for H1 (AUROC(S1) > 0.5) (SPEC §13)
+- `c1.hypotheses.classify_h2`: Classifier for H2 (S1 > S2: ΔAUROC > 0) (SPEC §13)
+- `c1.hypotheses.classify_h3`: Classifier for H3 (useful signal at ~80% coverage) (SPEC §13)
+- `c1.hypotheses.classify_h4`: Classifier for H4 (ICR relative fall > UCR relative fall; n/a if full ICR is 0) (SPEC §13)
+- `c1.hypotheses.classify_h5`: Classifier for H5 (implicit correct codes harder than explicit: ΔAUROC < 0) (SPEC §13)
+- `c1.hypotheses.evaluate_model_hypotheses`: Full evaluator for hypotheses H1 through H5 producing hypotheses.csv (SPEC §13, Table IX)
+
 
 

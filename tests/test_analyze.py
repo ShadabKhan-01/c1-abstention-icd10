@@ -76,6 +76,24 @@ def mock_analyze_env(tmp_path: Path) -> tuple[Config, Path]:
     codes_file = out_dir / "codes.csv"
     write_csv_atomic(codes_file, codes_rows)
 
+    # 4. cost_log.jsonl (for cost.csv)
+    cost_file = out_dir / "cost_log.jsonl"
+    with open(cost_file, "w", encoding="utf-8") as f:
+        for i in range(10):
+            nid = f"n{i:04d}"
+            f.write(f'{{"model": "llama3", "id": "{nid}", "stage": "greedy", "logical_calls": 1, "prompt_tokens": 100, "gen_tokens": 10, "seconds": 0.5}}\n')
+            f.write(f'{{"model": "llama3", "id": "{nid}", "stage": "samples", "logical_calls": 3, "prompt_tokens": 300, "gen_tokens": 30, "seconds": 1.5}}\n')
+            f.write(f'{{"model": "llama3", "id": "{nid}", "stage": "s2", "logical_calls": 1, "prompt_tokens": 120, "gen_tokens": 15, "seconds": 0.3}}\n')
+            f.write(f'{{"model": "llama3", "id": "{nid}", "stage": "s4", "logical_calls": 2, "prompt_tokens": 100, "gen_tokens": 0, "seconds": 0.2}}\n')
+            f.write(f'{{"model": "llama3", "id": "{nid}", "stage": "s3_post", "logical_calls": 0, "prompt_tokens": 0, "gen_tokens": 0, "seconds": 0.01}}\n')
+
+    # 5. samples.jsonl (for k_sens.csv)
+    samples_file = out_dir / "samples.jsonl"
+    with open(samples_file, "w", encoding="utf-8") as f:
+        for i in range(10):
+            nid = f"n{i:04d}"
+            f.write(f'{{"model": "llama3", "id": "{nid}", "mode": "batched", "k": 3, "runs": [{{"codes": ["E11.9"]}}, {{"codes": ["E11.9", "I10"]}}, {{"codes": ["E11.9"]}}], "prompt_tokens": 300, "gen_tokens": 30, "seconds": 1.5}}\n')
+
     cfg = Config.model_validate({
         "run_id": "test_run",
         "paths": {"data_dir": str(data_dir), "out_dir": str(tmp_path / "outputs")},
@@ -141,6 +159,52 @@ def test_run_analyze_stage_full(mock_analyze_env: tuple[Config, Path]) -> None:
     df_ctrl = pd.read_csv(out_dir / "results_controls.csv")
     assert len(df_ctrl) == len(df_results) * 2  # random and oracle for each row
     assert set(df_ctrl["control_type"].unique()) == {"random", "oracle"}
+
+    # 4. Verify M5 files (all 11 files per SPEC §4)
+    expected_files = [
+        "metrics_signals.csv",
+        "thresholds.json",
+        "results_test.csv",
+        "results_controls.csv",
+        "bootstrap.csv",
+        "by_feature.csv",
+        "confident_mistakes.csv",
+        "cost.csv",
+        "k_sens.csv",
+        "hypotheses.csv",
+        "recommendation.csv",
+    ]
+    for fn in expected_files:
+        p = out_dir / fn
+        assert p.is_file(), f"Expected output file {fn} missing from analyze stage"
+        assert p.stat().st_size > 0, f"Output file {fn} is empty"
+
+    # Verify bootstrap.csv rows
+    df_boot = pd.read_csv(out_dir / "bootstrap.csv")
+    assert len(df_boot) == 5  # 5 signals for llama3
+    assert "verdict" in df_boot.columns
+
+    # Verify recommendation.csv
+    df_rec = pd.read_csv(out_dir / "recommendation.csv")
+    assert len(df_rec) == 1
+    assert "recommended_signal" in df_rec.columns
+
+    # Verify by_feature.csv
+    df_feat = pd.read_csv(out_dir / "by_feature.csv")
+    assert "stratum" in df_feat.columns
+    assert "all notes" in df_feat["stratum"].values
+
+    # Verify cost.csv
+    df_cost = pd.read_csv(out_dir / "cost.csv")
+    assert set(df_cost["item"].unique()) == {"greedy", "s1", "s2", "s3", "s4", "s5"}
+
+    # Verify k_sens.csv
+    df_ksens = pd.read_csv(out_dir / "k_sens.csv")
+    assert set(df_ksens["k"].unique()) == {3}
+
+    # Verify hypotheses.csv
+    df_hypo = pd.read_csv(out_dir / "hypotheses.csv")
+    assert set(df_hypo["hypothesis"].unique()) == {"H1", "H2", "H3", "H4", "H5"}
 
 
 def test_cli_analyze_command(mock_analyze_env: tuple[Config, Path], tmp_path: Path) -> None:

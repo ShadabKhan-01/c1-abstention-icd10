@@ -22,6 +22,9 @@ def test_coverage_matrix_traceability() -> None:
     assert "## Milestone M0 Implemented Functions Traceability" in content
     assert "## Milestone M1 Implemented Functions Traceability" in content
     assert "## Milestone M2 Implemented Functions Traceability" in content
+    assert "## Milestone M3 Implemented Functions Traceability" in content
+    assert "## Milestone M4 Implemented Functions Traceability" in content
+    assert "## Milestone M5 Implemented Functions Traceability" in content
 
     # Extract all function references of the form `c1.<module>.<func>`
     func_pattern = re.compile(r"`c1\.([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)`")

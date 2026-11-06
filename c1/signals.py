@@ -168,3 +168,66 @@ def compute_s5(s1: float, s4: float) -> float:
     """
     return (s1 + s4) / 2.0
 
+
+def compute_k_sensitivity(
+    models: Sequence[str],
+    codes_df: pd.DataFrame,
+    samples_map_by_model: dict[str, dict[str, list[dict[str, Any]]]],
+    k_values: Sequence[int] = (3, 5, 10),
+) -> list[dict[str, Any]]:
+    """Compute Table VIII k-sensitivity on the dev split per SPEC §12.
+
+    Recomputes S1 from the first 3, 5, and 10 sampled lists with zero new LLM calls.
+
+    Args:
+        models: List of model names.
+        codes_df: codes.csv DataFrame containing dev codes.
+        samples_map_by_model: Map of model_name -> note_id -> sample_runs list.
+        k_values: Values of k to evaluate (default 3, 5, 10).
+
+    Returns:
+        List of dict rows for k_sens.csv with columns:
+        model, k, dev_auroc, extra_calls_per_note.
+    """
+    import numpy as np
+    from c1.metrics import compute_auroc
+
+    dev_df = codes_df[codes_df["split"] == "dev"].copy()
+    rows: list[dict[str, Any]] = []
+
+    for m in models:
+        m_dev = dev_df[dev_df["model"] == m].copy()
+        if len(m_dev) == 0:
+            for k in k_values:
+                rows.append({
+                    "model": m,
+                    "k": k,
+                    "dev_auroc": "",
+                    "extra_calls_per_note": k,
+                })
+            continue
+
+        m_samples = samples_map_by_model.get(m, {})
+
+        for k in k_values:
+            k_scores = []
+            for _, r in m_dev.iterrows():
+                nid = str(r["id"])
+                code = str(r["code"])
+                runs = m_samples.get(nid, [])
+                score = compute_s1(runs, code, k=k)
+                k_scores.append(score)
+
+            k_arr = np.array(k_scores, dtype=float)
+            auc = compute_auroc(m_dev["correct"], k_arr)
+
+            rows.append({
+                "model": m,
+                "k": k,
+                "dev_auroc": round(auc, 6) if not np.isnan(auc) else "",
+                "extra_calls_per_note": k,
+            })
+
+    return rows
+
+

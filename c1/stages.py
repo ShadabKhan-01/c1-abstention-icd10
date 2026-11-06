@@ -26,9 +26,17 @@ from c1.backend import (
     compute_s3_score,
     compute_s4_score,
 )
+from c1.bootstrap import BootstrapResult, run_model_bootstrap
+from c1.breakdown import (
+    CONFIDENT_MISTAKES_COLUMNS,
+    compute_breakdown_by_feature,
+    extract_confident_mistakes,
+)
 from c1.codes import Vocabulary
 from c1.controls import run_oracle_control, run_random_control
+from c1.cost import COST_COLUMNS, compute_cost_table
 from c1.data import Note, load_corpus, load_split
+from c1.hypotheses import HYPOTHESES_COLUMNS, evaluate_model_hypotheses
 from c1.label import label_code
 from c1.metrics import compute_auroc, compute_ece, compute_kept_metrics
 from c1.parse import parse_greedy_output, parse_s2_output
@@ -41,6 +49,7 @@ from c1.prompts import (
     truncate_note,
 )
 from c1.signals import (
+    compute_k_sensitivity,
     compute_s1,
     compute_s3_from_greedy,
     compute_s5,
@@ -1114,7 +1123,163 @@ def run_analyze_stage(
     ]
     write_csv_atomic(controls_file, results_controls_rows, fieldnames=controls_cols)
 
-    write_run_meta(out_p, config, extra={"command": "analyze", "milestone": "M4"})
+    # 5. Best signal per model (highest dev AUROC, SPEC §10, §17 A2)
+    dev_metrics_rows = [r for r in metrics_rows if r["split"] == "dev"]
+    best_signals: dict[str, str] = {}
+    for m in models:
+        m_dev = [r for r in dev_metrics_rows if r["model"] == m and r["auroc"] != ""]
+        if m_dev:
+            best_r = max(m_dev, key=lambda r: float(r["auroc"]))
+            best_signals[m] = best_r["signal"]
+        else:
+            best_signals[m] = "s1"
+    logger.info("Best signals per model (highest dev AUROC): %s", best_signals)
+
+    # 6. Cost accounting (Table VII, SPEC §12)
+    cost_log_file = out_p / "cost_log.jsonl"
+    cost_rows = compute_cost_table(cost_log_file, models, k_samples=config.decoding.sample.k)
+    cost_file = out_p / "cost.csv"
+    write_csv_atomic(cost_file, cost_rows, fieldnames=COST_COLUMNS)
+
+    extra_calls_by_model: dict[str, dict[str, float]] = {m: {} for m in models}
+    for cr in cost_rows:
+        extra_calls_by_model[cr["model"]][cr["item"]] = float(cr["extra_logical_calls"])
+
+    # 7. k-sensitivity on dev split (Table VIII, SPEC §12)
+    samples_file = out_p / "samples.jsonl"
+    samples_map_by_model: dict[str, dict[str, list[dict[str, Any]]]] = {m: {} for m in models}
+    if samples_file.is_file():
+        s_records = read_jsonl_resume(samples_file)
+        for s_rec in s_records:
+            m = s_rec.get("model")
+            nid = s_rec.get("id")
+            if m in samples_map_by_model and nid:
+                samples_map_by_model[m][nid] = s_rec.get("runs", [])
+
+    k_sens_rows = compute_k_sensitivity(
+        models=models,
+        codes_df=codes_df,
+        samples_map_by_model=samples_map_by_model,
+        k_values=tuple(config.k_sensitivity),
+    )
+    k_sens_file = out_p / "k_sens.csv"
+    write_csv_atomic(k_sens_file, k_sens_rows, fieldnames=["model", "k", "dev_auroc", "extra_calls_per_note"])
+
+    # 8. Note-level bootstrap & Recommendation (Table V, SPEC §10)
+    all_bootstrap_results: list[BootstrapResult] = []
+    recommendation_rows: list[dict[str, str]] = []
+    hypotheses_dists_by_model: dict[str, dict[str, Any]] = {}
+
+    for m in models:
+        m_test_df = codes_df[(codes_df["model"] == m) & (codes_df["split"] == "test")].copy()
+        m_b_results, (m_rec_sig, m_rec_rationale), m_hypo_dists = run_model_bootstrap(
+            model_name=m,
+            test_df=m_test_df,
+            test_notes=test_notes,
+            thresholds=thresholds_by_model[m],
+            primary_target=config.primary_target,
+            b_repeats=config.bootstrap.B,
+            seed=config.bootstrap.seed,
+            extra_calls=extra_calls_by_model.get(m, {}),
+            signals=signals,
+        )
+        all_bootstrap_results.extend(m_b_results)
+        recommendation_rows.append({
+            "model": m,
+            "recommended_signal": m_rec_sig,
+            "rationale": m_rec_rationale,
+        })
+        hypotheses_dists_by_model[m] = m_hypo_dists
+
+    bootstrap_file = out_p / "bootstrap.csv"
+    bootstrap_cols = [
+        "model", "signal", "target_coverage", "realised_coverage",
+        "auroc_mean", "auroc_ci_lower", "auroc_ci_upper",
+        "delta_precision_mean", "delta_precision_ci_lower", "delta_precision_ci_upper",
+        "delta_ucr_mean", "delta_ucr_ci_lower", "delta_ucr_ci_upper",
+        "delta_icr_observed", "delta_icr_mean", "delta_icr_ci_lower", "delta_icr_ci_upper",
+        "cond1_precision", "cond2_ucr", "cond3_icr", "verdict", "skipped_resamples"
+    ]
+    bootstrap_rows = [
+        {
+            "model": r.model,
+            "signal": r.signal,
+            "target_coverage": r.target_coverage,
+            "realised_coverage": round(r.realised_coverage, 6) if not np.isnan(r.realised_coverage) else "",
+            "auroc_mean": round(r.auroc_mean, 6) if not np.isnan(r.auroc_mean) else "",
+            "auroc_ci_lower": round(r.auroc_ci_lower, 6) if not np.isnan(r.auroc_ci_lower) else "",
+            "auroc_ci_upper": round(r.auroc_ci_upper, 6) if not np.isnan(r.auroc_ci_upper) else "",
+            "delta_precision_mean": round(r.delta_precision_mean, 6) if not np.isnan(r.delta_precision_mean) else "",
+            "delta_precision_ci_lower": round(r.delta_precision_ci_lower, 6) if not np.isnan(r.delta_precision_ci_lower) else "",
+            "delta_precision_ci_upper": round(r.delta_precision_ci_upper, 6) if not np.isnan(r.delta_precision_ci_upper) else "",
+            "delta_ucr_mean": round(r.delta_ucr_mean, 6) if not np.isnan(r.delta_ucr_mean) else "",
+            "delta_ucr_ci_lower": round(r.delta_ucr_ci_lower, 6) if not np.isnan(r.delta_ucr_ci_lower) else "",
+            "delta_ucr_ci_upper": round(r.delta_ucr_ci_upper, 6) if not np.isnan(r.delta_ucr_ci_upper) else "",
+            "delta_icr_observed": round(r.delta_icr_observed, 6) if not np.isnan(r.delta_icr_observed) else "",
+            "delta_icr_mean": round(r.delta_icr_mean, 6) if not np.isnan(r.delta_icr_mean) else "",
+            "delta_icr_ci_lower": round(r.delta_icr_ci_lower, 6) if not np.isnan(r.delta_icr_ci_lower) else "",
+            "delta_icr_ci_upper": round(r.delta_icr_ci_upper, 6) if not np.isnan(r.delta_icr_ci_upper) else "",
+            "cond1_precision": r.cond1_precision,
+            "cond2_ucr": r.cond2_ucr,
+            "cond3_icr": r.cond3_icr,
+            "verdict": r.verdict,
+            "skipped_resamples": r.skipped_resamples,
+        }
+        for r in all_bootstrap_results
+    ]
+    write_csv_atomic(bootstrap_file, bootstrap_rows, fieldnames=bootstrap_cols)
+
+    rec_file = out_p / "recommendation.csv"
+    write_csv_atomic(rec_file, recommendation_rows, fieldnames=["model", "recommended_signal", "rationale"])
+
+    # 9. Breakdown by Note Feature & Confident Mistakes (Table VI, SPEC §11)
+    by_feature_rows = compute_breakdown_by_feature(
+        models=models,
+        codes_df=codes_df,
+        test_notes=test_notes,
+        best_signals=best_signals,
+        thresholds=thresholds_by_model,
+        primary_target=config.primary_target,
+    )
+    by_feature_file = out_p / "by_feature.csv"
+    by_feature_cols = [
+        "model", "stratum", "best_signal", "tau", "n_codes", "auroc",
+        "precision_full", "precision_kept", "ucr_kept"
+    ]
+    write_csv_atomic(by_feature_file, by_feature_rows, fieldnames=by_feature_cols)
+
+    mistake_rows, cause_counts = extract_confident_mistakes(
+        models=models,
+        codes_df=codes_df,
+        test_notes=test_notes,
+        best_signals=best_signals,
+        thresholds=thresholds_by_model,
+        primary_target=config.primary_target,
+    )
+    confident_mistakes_file = out_p / "confident_mistakes.csv"
+    write_csv_atomic(confident_mistakes_file, mistake_rows, fieldnames=CONFIDENT_MISTAKES_COLUMNS)
+
+    # 10. Hypotheses H1-H5 (Table IX, SPEC §13)
+    all_hypotheses_rows: list[dict[str, Any]] = []
+    for m in models:
+        m_test_df = codes_df[(codes_df["model"] == m) & (codes_df["split"] == "test")]
+        n_test = len(m_test_df)
+        full_icr = int(m_test_df["invalid"].sum()) / n_test if n_test > 0 else 0.0
+
+        m_b_res = [r for r in all_bootstrap_results if r.model == m]
+        m_h_rows = evaluate_model_hypotheses(
+            model_name=m,
+            best_signal=best_signals[m],
+            bootstrap_results=m_b_res,
+            hypotheses_dists=hypotheses_dists_by_model[m],
+            full_icr=full_icr,
+        )
+        all_hypotheses_rows.extend(m_h_rows)
+
+    hypotheses_file = out_p / "hypotheses.csv"
+    write_csv_atomic(hypotheses_file, all_hypotheses_rows, fieldnames=HYPOTHESES_COLUMNS)
+
+    write_run_meta(out_p, config, extra={"command": "analyze", "milestone": "M5", "cause_counts": {f"{k[0]}:{k[1]}": v for k, v in cause_counts.items()}})
 
     summary = {
         "models": models,
@@ -1122,10 +1287,20 @@ def run_analyze_stage(
         "thresholds_file": str(thresholds_path),
         "results_test_file": str(test_results_file),
         "results_controls_file": str(controls_file),
+        "bootstrap_file": str(bootstrap_file),
+        "by_feature_file": str(by_feature_file),
+        "confident_mistakes_file": str(confident_mistakes_file),
+        "cost_file": str(cost_file),
+        "k_sens_file": str(k_sens_file),
+        "hypotheses_file": str(hypotheses_file),
+        "recommendation_file": str(rec_file),
         "total_test_rows": len(results_test_rows),
         "total_control_rows": len(results_controls_rows),
+        "total_bootstrap_rows": len(bootstrap_rows),
+        "total_by_feature_rows": len(by_feature_rows),
+        "total_confident_mistakes": len(mistake_rows),
     }
-    logger.info("Completed M4 analyze stage: %s", summary)
+    logger.info("Completed M5 analyze stage: %s", summary)
     return summary
 
 

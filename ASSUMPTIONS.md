@@ -23,3 +23,7 @@ This document records ambiguities in the paper and the defaults adopted, as spec
 | A17 | `position` indexing in `codes.csv` | 1-indexed (1 to N) representing the order of codes in greedy `pred` list (SPEC §4) |
 | A18 | ECE for non-probability signals | ECE is undefined for S1 and S5 (not calibrated probabilities); stored as NaN in computations and empty string in CSV (SPEC §7, §14) |
 | A19 | Zero denominators in kept metrics | Evaluates to NaN (or 0.0 for F1 when P+R == 0) per SPEC §7 zero-denominator rule |
+| A20 | Confident mistakes note text truncation | Synthetic note text is truncated by character count (`note.text[:600]`) for top 5 highest-scoring cases per cause tag (SPEC §11) |
+| A21 | H4 zero full-list ICR | When full-list ICR is 0.0, H4 status is `n/a` per SPEC §13 |
+| A22 | H5 single-class resample skip | Bootstrap resamples with 0 positives or 0 negatives for implicit or explicit gold codes are skipped for H5 calculation |
+| A23 | Bootstrap confidence interval calculation | Empirical percentile 95% intervals computed via `[np.percentile(samples, 2.5), np.percentile(samples, 97.5)]` (SPEC §10) |
