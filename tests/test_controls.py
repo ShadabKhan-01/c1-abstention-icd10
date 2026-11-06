@@ -105,3 +105,4 @@ def test_controls_determinism(test_codes_df: pd.DataFrame) -> None:
     r1 = run_random_control(test_codes_df, 0.8, 80, 20, repeats=100, seed=7)
     r2 = run_random_control(test_codes_df, 0.8, 80, 20, repeats=100, seed=7)
     assert r1 == r2
+

@@ -153,3 +153,4 @@ def test_cli_analyze_command(mock_analyze_env: tuple[Config, Path], tmp_path: Pa
 
     ret = main(["analyze", "--config", str(config_path), "--out", str(out_dir)])
     assert ret == 0
+

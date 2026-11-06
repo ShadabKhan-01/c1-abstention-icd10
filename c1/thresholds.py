@@ -143,3 +143,4 @@ def load_thresholds(path: str | Path) -> dict[str, Any]:
         raise FileNotFoundError(f"thresholds.json not found at {p}")
     with open(p, "r", encoding="utf-8") as f:
         return json.load(f)
+
