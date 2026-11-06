@@ -150,3 +150,4 @@ def test_s5_computation() -> None:
     assert pytest.approx(compute_s5(0.9, 0.7), 0.001) == 0.80
     assert pytest.approx(compute_s5(1.0, 0.0), 0.001) == 0.50
     assert pytest.approx(compute_s5(0.0, 0.0), 0.001) == 0.00
+

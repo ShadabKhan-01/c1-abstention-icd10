@@ -118,3 +118,4 @@ def test_label_note_codes_batch(test_vocab: Vocabulary, sample_note: Note) -> No
     assert labels[0].correct and labels[0].code == "E11.9"
     assert labels[1].unsupported and labels[1].cause_tag == "negated"
     assert labels[2].invalid and labels[2].cause_tag == "other"
+

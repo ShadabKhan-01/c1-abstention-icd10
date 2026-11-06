@@ -201,3 +201,4 @@ def test_build_codes_cli_mock(tmp_path: Path, mock_config: Config) -> None:
     ret = main(["build-codes", "--config", "configs/c1.yaml", "--model", "llama3", "--backend", "mock", "--out", str(out_dir)])
     assert ret == 0
     assert (out_dir / "codes.csv").is_file()
+

@@ -126,3 +126,4 @@ def label_note_codes(
         List of CodeLabel objects corresponding to each code in order.
     """
     return [label_code(c, note, vocab) for c in codes]
+

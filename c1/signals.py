@@ -167,3 +167,4 @@ def compute_s5(s1: float, s4: float) -> float:
         S5 score in [0.0, 1.0].
     """
     return (s1 + s4) / 2.0
+
