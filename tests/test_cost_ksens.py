@@ -126,3 +126,4 @@ def test_k_sensitivity_dev_split_recomputation() -> None:
         assert r["extra_calls_per_note"] == expected_k
         assert r["dev_auroc"] != ""
         assert 0.0 <= float(r["dev_auroc"]) <= 1.0
+

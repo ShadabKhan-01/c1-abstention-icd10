@@ -220,3 +220,4 @@ def compute_cost_table(
         })
 
     return cost_rows
+

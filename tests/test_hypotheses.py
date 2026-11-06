@@ -137,3 +137,4 @@ def test_classify_h5_rejected() -> None:
 def test_classify_h5_inconclusive() -> None:
     """H5 inconclusive when ΔAUROC CI contains 0."""
     assert classify_h5(ci_lower=-0.06, ci_upper=0.05) == "inconclusive"
+

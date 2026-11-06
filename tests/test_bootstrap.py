@@ -190,3 +190,4 @@ def test_bootstrap_determinism_same_seed() -> None:
         assert r1.delta_ucr_ci_lower == r2.delta_ucr_ci_lower
         assert r1.delta_ucr_ci_upper == r2.delta_ucr_ci_upper
         assert r1.verdict == r2.verdict
+

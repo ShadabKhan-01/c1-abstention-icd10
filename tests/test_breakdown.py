@@ -126,3 +126,4 @@ def test_confident_mistakes_filtering_and_truncation() -> None:
     assert n1_mistake["rank_in_tag"] == 1
     assert n1_mistake["cause_tag"] == "negated"
     assert n1_mistake["error_type"] == "unsupported"
+
