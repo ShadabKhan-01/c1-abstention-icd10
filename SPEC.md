@@ -196,7 +196,7 @@ Format everywhere: AUROC/ECE/precision/recall/F1 with 3 decimals; coverage and r
 | **Table II** | notes (dev/test), mean gold codes/note, distinct gold codes, share of gold codes that are implicit, mean predicted codes/note **per model** |
 | **Table III** | per model × signal: AUROC [CI], ECE (S2–S4 only), `—` elsewhere |
 | **Table IV(a)/(b)** | per model, best signal: Full list; target 90/80/70/60% rows (realised coverage, precision, recall, micro-F1, UCR, ICR, review load); **Random** and **Oracle** rows at the 80% row's coverage |
-| **Table IV(c)** | copy of the headline numbers of IV: full list vs best signal at ~80% (precision, UCR, ICR) — no new computation |
+| **Table IV(c)** | copy of the headline numbers of IV: full list vs best signal at ~80% (precision, recall, UCR, ICR, review load) — no new computation |
 | **Table V** | per model, best signal at 80%: Δprecision, ΔUCR, ΔICR with 95% CI, the three conditions, the verdict, plus the recommendation line |
 | **Table VI** | §11 |
 | **Table VII** | §12 cost |

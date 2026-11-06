@@ -206,3 +206,14 @@ def test_tables_refuses_when_sanity_failed(mock_pipeline_outputs: Path) -> None:
 
     with pytest.raises(RuntimeError, match="Sanity verification failed"):
         run_all_tables(out_dir, allow_mock=True)
+
+
+def test_table_iv_c_has_paper_rows(mock_pipeline_outputs: Path) -> None:
+    """Table IV(c) carries the paper's five measures, copied from results_test.csv."""
+    df = pd.read_csv(mock_pipeline_outputs / "results_test.csv")
+    md, out = generate_table_iv_c(df, {"llama3": "s1"})
+    for col in ("precision", "recall", "ucr", "icr", "review_load"):
+        assert col in out.columns
+    assert "Recall" in md and "Review Load" in md
+    kept = out[out["setting"].str.startswith("Kept")].iloc[0]
+    assert kept["recall"] == "0.480" and kept["review_load"] == "1.000"

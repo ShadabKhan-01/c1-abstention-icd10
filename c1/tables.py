@@ -499,8 +499,10 @@ def generate_table_iv_c(
                 "model": m,
                 "setting": "Full list",
                 "precision": fmt_dec3(fr["precision"]),
+                "recall": fmt_dec3(fr["recall"]),
                 "ucr": fmt_pct1(fr["ucr"]),
                 "icr": fmt_pct1(fr["icr"]),
+                "review_load": fmt_dec3(fr["review_load"]),
             })
 
         # Kept at 80%
@@ -511,21 +513,23 @@ def generate_table_iv_c(
                 "model": m,
                 "setting": f"Kept ({best_sig.upper()} at ~80%)",
                 "precision": fmt_dec3(kr["precision"]),
+                "recall": fmt_dec3(kr["recall"]),
                 "ucr": fmt_pct1(kr["ucr"]),
                 "icr": fmt_pct1(kr["icr"]),
+                "review_load": fmt_dec3(kr["review_load"]),
             })
 
     df = pd.DataFrame(rows)
     footnote = make_standard_footnote(config, best_signals=best_signals)
 
     md_lines = [
-        "# Table IV(c): Headline Summary — Precision and Error Rates",
+        "# Table IV(c): Headline Summary — Old (Full list) vs New (~80%)",
         "",
-        "| Model | Setting | Precision | UCR | ICR |",
-        "|---|---|---|---|---|",
+        "| Model | Setting | Precision | Recall | UCR | ICR | Review Load |",
+        "|---|---|---|---|---|---|---|",
     ]
     for r in rows:
-        md_lines.append(f"| {r['model']} | {r['setting']} | {r['precision']} | {r['ucr']} | {r['icr']} |")
+        md_lines.append(f"| {r['model']} | {r['setting']} | {r['precision']} | {r['recall']} | {r['ucr']} | {r['icr']} | {r['review_load']} |")
     md_lines.extend(["", f"*{footnote}*", ""])
     md_str = "\n".join(md_lines)
 
