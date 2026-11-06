@@ -18,6 +18,8 @@ from pathlib import Path
 import sys
 from typing import Sequence
 
+from c1.utils import load_config
+
 logger = logging.getLogger(__name__)
 
 
@@ -102,6 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_tables.add_argument("--config", default="configs/c1.yaml", help="Path to config")
     p_tables.add_argument("--out", default=None, help="Output run directory")
     p_tables.add_argument("--table", default="all", help="Specific table to render (e.g. II or all)")
+    p_tables.add_argument("--allow-mock", action="store_true", help="Permit rendering tables from mock outputs with MOCK DATA stamp")
 
     p_figures = subparsers.add_parser(
         "figures",
@@ -109,6 +112,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_figures.add_argument("--config", default="configs/c1.yaml", help="Path to config")
     p_figures.add_argument("--out", default=None, help="Output run directory")
+    p_figures.add_argument("--allow-mock", action="store_true", help="Permit rendering figures from mock outputs with MOCK DATA stamp")
 
     p_sanity = subparsers.add_parser(
         "sanity",
@@ -117,6 +121,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_sanity.add_argument("--config", default="configs/c1.yaml", help="Path to config")
     p_sanity.add_argument("--out", default=None, help="Output run directory")
     p_sanity.add_argument("--stage-counts-only", action="store_true", help="Check stage counts only")
+    p_sanity.add_argument("--allow-mock", action="store_true", help="Permit sanity check on mock outputs")
 
     p_paper_numbers = subparsers.add_parser(
         "paper-numbers",
@@ -124,6 +129,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_paper_numbers.add_argument("--config", default="configs/c1.yaml", help="Path to config")
     p_paper_numbers.add_argument("--out", default=None, help="Output run directory")
+    p_paper_numbers.add_argument("--allow-mock", action="store_true", help="Permit paper numbers summary from mock outputs with MOCK DATA stamp")
 
     return parser
 
@@ -340,12 +346,115 @@ def run_analyze_cli(args: argparse.Namespace) -> int:
 
     summary = run_analyze_stage(config, out_dir)
 
-    print("\n=== Analysis Summary (Milestone M4) ===")
+    print("\n=== Analysis Summary (Milestone M4/M5) ===")
     print(f"Models: {', '.join(summary['models'])}")
     print(f"Saved: {summary['thresholds_file']}")
     print(f"Saved: {summary['metrics_signals_file']}")
     print(f"Saved: {summary['results_test_file']} ({summary['total_test_rows']} rows)")
-    print(f"Saved: {summary['results_controls_file']} ({summary['total_control_rows']} rows)\n")
+    print(f"Saved: {summary['results_controls_file']} ({summary['total_control_rows']} rows)")
+    print(f"Saved: {summary['bootstrap_file']} ({summary['total_bootstrap_rows']} rows)")
+    print(f"Saved: {summary['by_feature_file']} ({summary['total_by_feature_rows']} rows)")
+    print(f"Saved: {summary['confident_mistakes_file']} ({summary['total_confident_mistakes']} rows)")
+    print(f"Saved: {summary['cost_file']}")
+    print(f"Saved: {summary['k_sens_file']}")
+    print(f"Saved: {summary['hypotheses_file']}")
+    print(f"Saved: {summary['recommendation_file']}\n")
+    return 0
+
+
+def run_sanity_cli(args: Any) -> int:
+    """CLI handler for c1 sanity."""
+    config = load_config(args.config)
+    out_dir = Path(args.out) if args.out else Path(config.paths.out_dir) / config.run_id
+    if not out_dir.is_dir() and args.allow_mock:
+        mock_dir = Path("outputs_mock") / config.run_id
+        if mock_dir.is_dir():
+            out_dir = mock_dir
+
+    from c1.sanity import run_sanity_checks
+    passed, report = run_sanity_checks(
+        out_dir=out_dir,
+        config=config,
+        allow_mock=args.allow_mock,
+        stage_counts_only=args.stage_counts_only,
+    )
+    print("\n=== Sanity Verification Report ===")
+    print(f"Directory: {out_dir}")
+    print(f"Passed: {passed}")
+    for name, c in report["checks"].items():
+        st = "PASS" if c["passed"] else "FAIL"
+        print(f"  [{st}] {name}: {c['details']}")
+    if not passed:
+        print(f"\nSanity check FAILED. Errors logged in {out_dir / 'sanity_report.json'}.\n")
+        return 1
+    print(f"\nAll sanity checks PASSED. Report saved to {out_dir / 'sanity_report.json'}.\n")
+    return 0
+
+
+def run_tables_cli(args: Any) -> int:
+    """CLI handler for c1 tables."""
+    config = load_config(args.config)
+    out_dir = Path(args.out) if args.out else Path(config.paths.out_dir) / config.run_id
+    if not out_dir.is_dir() and args.allow_mock:
+        mock_dir = Path("outputs_mock") / config.run_id
+        if mock_dir.is_dir():
+            out_dir = mock_dir
+
+    if args.table == "II":
+        from c1.tables import run_table_ii_from_config
+        md_str, _ = run_table_ii_from_config(args.config, out_override=out_dir, allow_mock=args.allow_mock)
+        print(md_str)
+        return 0
+
+    from c1.tables import run_all_tables
+    table_paths = run_all_tables(
+        out_dir=out_dir,
+        config_path=args.config,
+        allow_mock=args.allow_mock,
+        selected_table=args.table,
+    )
+    print("\n=== Generated Tables ===")
+    for name, p in table_paths.items():
+        print(f"  {name}: {p}")
+    print(f"Reports directory: {out_dir / 'reports'}\n")
+    return 0
+
+
+def run_figures_cli(args: Any) -> int:
+    """CLI handler for c1 figures."""
+    config = load_config(args.config)
+    out_dir = Path(args.out) if args.out else Path(config.paths.out_dir) / config.run_id
+    if not out_dir.is_dir() and args.allow_mock:
+        mock_dir = Path("outputs_mock") / config.run_id
+        if mock_dir.is_dir():
+            out_dir = mock_dir
+
+    from c1.figures import run_all_figures
+    fig_paths = run_all_figures(
+        out_dir=out_dir,
+        config=config,
+        allow_mock=args.allow_mock,
+    )
+    print("\n=== Generated Figures ===")
+    for name, p in fig_paths.items():
+        print(f"  {name}: {p}")
+    print(f"Reports directory: {out_dir / 'reports'}\n")
+    return 0
+
+
+def run_paper_numbers_cli(args: Any) -> int:
+    """CLI handler for c1 paper-numbers."""
+    config = load_config(args.config)
+    out_dir = Path(args.out) if args.out else Path(config.paths.out_dir) / config.run_id
+    if not out_dir.is_dir() and args.allow_mock:
+        mock_dir = Path("outputs_mock") / config.run_id
+        if mock_dir.is_dir():
+            out_dir = mock_dir
+
+    from c1.tables import generate_paper_numbers
+    content = generate_paper_numbers(out_dir=out_dir, config=config, allow_mock=args.allow_mock)
+    print("\n=== Paper Numbers Summary ===")
+    print(content)
     return 0
 
 
@@ -376,12 +485,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "tables":
-        if args.table in ("II", "all"):
-            from c1.tables import run_table_ii_from_config
-            md_str, _ = run_table_ii_from_config(args.config, args.out)
-            print(md_str)
-            return 0
-        raise NotImplementedError(f"Table {args.table} is not implemented in Milestone M1.")
+        return run_tables_cli(args)
+
+    if args.command == "figures":
+        return run_figures_cli(args)
+
+    if args.command == "sanity":
+        return run_sanity_cli(args)
+
+    if args.command == "paper-numbers":
+        return run_paper_numbers_cli(args)
 
     if args.command == "run":
         return run_pipeline_cli(args)
@@ -397,15 +510,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "analyze":
         return run_analyze_cli(args)
-
-    stubs: dict[str, str] = {
-        "figures": "Milestone M6",
-        "sanity": "Milestone M6",
-        "paper-numbers": "Milestone M6",
-    }
-
-    if args.command in stubs:
-        raise NotImplementedError(stubs[args.command])
 
     parser.print_help()
     return 1

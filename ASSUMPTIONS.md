@@ -27,3 +27,5 @@ This document records ambiguities in the paper and the defaults adopted, as spec
 | A21 | H4 zero full-list ICR | When full-list ICR is 0.0, H4 status is `n/a` per SPEC §13 |
 | A22 | H5 single-class resample skip | Bootstrap resamples with 0 positives or 0 negatives for implicit or explicit gold codes are skipped for H5 calculation |
 | A23 | Bootstrap confidence interval calculation | Empirical percentile 95% intervals computed via `[np.percentile(samples, 2.5), np.percentile(samples, 97.5)]` (SPEC §10) |
+| A24 | Tables and figures mock data mixing guard | Mock outputs and `outputs_mock` path rejected in production mode; allowed with `--allow-mock` which stamps `MOCK DATA` on markdown, CSV, and PNG reports (SPEC §14, §15, AGENTS.md §2) |
+| A25 | Sanity report prerequisite | `tables` and `figures` require `sanity_report.json` with `passed == true` before generating reports (SPEC §15) |

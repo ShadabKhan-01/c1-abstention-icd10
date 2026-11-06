@@ -291,15 +291,15 @@ def test_cli_subparsers_list_all_commands() -> None:
         assert cmd in help_text
 
 
-def test_cli_stubs_raise_not_implemented() -> None:
-    """Verify that unimplemented CLI commands raise NotImplementedError with their milestone."""
-    stubs = {
-        "figures": "Milestone M6",
-        "sanity": "Milestone M6",
-        "paper-numbers": "Milestone M6",
+def test_cli_all_commands_implemented() -> None:
+    """Verify that all pipeline CLI commands are implemented and none raise NotImplementedError."""
+    from c1.cli import build_parser
+    parser = build_parser()
+    subparsers = [a for a in parser._actions if a.dest == "command"]
+    assert len(subparsers) == 1
+    registered_cmds = set(subparsers[0].choices.keys())
+    expected = {
+        "make-corpus", "split", "run", "selfcheck", "estimate",
+        "build-codes", "analyze", "tables", "figures", "sanity", "paper-numbers",
     }
-
-    for cmd, milestone in stubs.items():
-        with pytest.raises(NotImplementedError) as exc_info:
-            cli_main([cmd])
-        assert milestone in str(exc_info.value)
+    assert expected.issubset(registered_cmds)

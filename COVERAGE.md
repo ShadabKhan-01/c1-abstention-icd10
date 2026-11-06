@@ -25,8 +25,8 @@ This matrix tracks the implementation and test status of every paper element and
 | [x] | Table IX hypotheses H1–H5 | 13 | `c1/hypotheses.py`, `c1/stages.py` | `evaluate_model_hypotheses`, `classify_h1`, `classify_h2`, `classify_h3`, `classify_h4`, `classify_h5`, `run_analyze_stage` | `hypotheses.csv` | M5 |
 | [x] | Selfcheck (S3 alignment, S4 token check, determinism) | 3 | `c1/backend.py`, `c1/stages.py`, `c1/cli.py` | `run_selfcheck`, `run_selfcheck_cli` | `selfcheck_report.json` | M2 |
 | [x] | Time estimate | 16 | `c1/stages.py`, `c1/cli.py` | `run_estimate`, `run_estimate_cli` | printed | M2 |
-| [ ] | Sanity checks | 15 | `sanity.py` | — | `sanity_report.json` | M6 |
-| [ ] | In-text numbers | 14 | `tables.py` | — | `paper_numbers.md` | M6 |
+| [x] | Sanity checks | 15 | `c1/sanity.py`, `c1/cli.py` | `run_sanity_checks`, `run_sanity_cli` | `sanity_report.json` | M6 |
+| [x] | In-text numbers & Tables II–IX & Figures 1–2 | 14 | `c1/tables.py`, `c1/figures.py`, `c1/cli.py` | `run_all_tables`, `run_all_figures`, `generate_paper_numbers`, `run_tables_cli`, `run_figures_cli` | `reports/table_*.md/.csv`, `reports/fig*.png`, `reports/paper_numbers.md` | M6 |
 | [x] | Reproducibility record & utils | 4 | `c1/utils.py` | `set_seed`, `load_config`, `write_json_atomic`, `write_csv_atomic`, `append_jsonl`, `read_jsonl_resume`, `get_completed_ids`, `sha256_file`, `sha256_string`, `write_run_meta` | `run_meta.json` | M0 |
 | [x] | CLI Scaffolding & Generation Runners | 4 | `c1/cli.py` | `main`, `build_parser`, `run_pipeline_cli`, `run_selfcheck_cli`, `run_estimate_cli` | CLI entry point | M0, M2 |
 
@@ -135,6 +135,39 @@ This matrix tracks the implementation and test status of every paper element and
 - `c1.hypotheses.classify_h4`: Classifier for H4 (ICR relative fall > UCR relative fall; n/a if full ICR is 0) (SPEC §13)
 - `c1.hypotheses.classify_h5`: Classifier for H5 (implicit correct codes harder than explicit: ΔAUROC < 0) (SPEC §13)
 - `c1.hypotheses.evaluate_model_hypotheses`: Full evaluator for hypotheses H1 through H5 producing hypotheses.csv (SPEC §13, Table IX)
+
+## Milestone M6 Implemented Functions Traceability
+
+- `c1.sanity.run_sanity_checks`: Master runtime verification engine auditing file completeness, stage parity, disjoint split, code identities, prompt hash consistency, and mock mixing guard (SPEC §15)
+- `c1.sanity.check_file_completeness`: Validates presence and non-empty status of all 17 required pipeline output files (SPEC §4, §15)
+- `c1.sanity.check_mock_mixing_guard`: Production mixing guard blocking outputs_mock and mock backend records unless explicitly allowed (SPEC §15, AGENTS.md §2)
+- `c1.sanity.check_split_integrity`: Verifies disjoint split sets (dev ∩ test = ∅) and 30/70 proportion ±1 note (SPEC §15)
+- `c1.sanity.check_stage_parity`: Verifies note count equality across greedy, samples, s2, and s4 stages (SPEC §15)
+- `c1.sanity.check_code_identities`: Asserts correct + invalid + unsupported == N_pred, mutual exclusivity, and precision + UCR + ICR == 1.0 (SPEC §5.3, §7, §15)
+- `c1.sanity.check_prompts_hash_consistency`: Verifies prompts_hash is single-valued per model and consistent across models (SPEC §5.1, §15)
+- `c1.figures.generate_fig1_risk_coverage`: Renders Fig 1 risk-coverage curves per model with random baseline (SPEC §14)
+- `c1.figures.generate_fig2_reliability`: Renders Fig 2 reliability diagrams for probability signals (S2, S3, S4) with diagonal reference (SPEC §14)
+- `c1.figures.run_all_figures`: Master figure runner checking mock guard and sanity status before rendering to PNG (SPEC §14, §15)
+- `c1.tables.fmt_dec3`: Formats float metrics to 3 decimal places or em-dash (SPEC §14)
+- `c1.tables.fmt_pct1`: Formats coverage and error rates as percentages with 1 decimal place (SPEC §14)
+- `c1.tables.fmt_ci`: Formats confidence intervals as [lo, hi] (SPEC §14)
+- `c1.tables.fmt_signed_delta`: Formats signed differences with confidence intervals (SPEC §14)
+- `c1.tables.generate_table_ii`: Generates Table II corpus and prediction statistics (SPEC §14)
+- `c1.tables.generate_table_iii`: Generates Table III discrimination (AUROC [CI]) and calibration (ECE) (SPEC §14)
+- `c1.tables.generate_table_iv`: Generates Table IV(a)/(b) risk-coverage progression for best signal (SPEC §14)
+- `c1.tables.generate_table_iv_c`: Generates Table IV(c) headline numbers summary (SPEC §14)
+- `c1.tables.generate_table_v`: Generates Table V statistical verdict and recommendation (SPEC §14)
+- `c1.tables.generate_table_vi`: Generates Table VI feature strata breakdown (SPEC §14)
+- `c1.tables.generate_table_vii`: Generates Table VII computational cost accounting (SPEC §14)
+- `c1.tables.generate_table_viii`: Generates Table VIII k-sensitivity on dev split (SPEC §14)
+- `c1.tables.generate_table_ix`: Generates Table IX pre-registered hypotheses evaluation (SPEC §14)
+- `c1.tables.generate_paper_numbers`: Generates paper_numbers.md compiling in-text numbers (SPEC §14)
+- `c1.tables.run_all_tables`: Master table runner checking mock guard and sanity status before generating all tables and paper numbers (SPEC §14, §15)
+- `c1.cli.run_sanity_cli`: CLI handler for c1 sanity (SPEC §15)
+- `c1.cli.run_tables_cli`: CLI handler for c1 tables (SPEC §14)
+- `c1.cli.run_figures_cli`: CLI handler for c1 figures (SPEC §14)
+- `c1.cli.run_paper_numbers_cli`: CLI handler for c1 paper-numbers (SPEC §14)
+
 
 
 

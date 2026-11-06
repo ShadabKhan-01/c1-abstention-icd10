@@ -25,6 +25,7 @@ def test_coverage_matrix_traceability() -> None:
     assert "## Milestone M3 Implemented Functions Traceability" in content
     assert "## Milestone M4 Implemented Functions Traceability" in content
     assert "## Milestone M5 Implemented Functions Traceability" in content
+    assert "## Milestone M6 Implemented Functions Traceability" in content
 
     # Extract all function references of the form `c1.<module>.<func>`
     func_pattern = re.compile(r"`c1\.([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)`")
@@ -35,4 +36,21 @@ def test_coverage_matrix_traceability() -> None:
         full_mod = f"c1.{mod_name}"
         mod = importlib.import_module(full_mod)
         assert hasattr(mod, item_name), f"Expected {item_name} in {full_mod} per COVERAGE.md"
+
+    # Assert every paper table and figure has a registered producer (SPEC §14, §15)
+    import c1.figures as figures
+    import c1.tables as tables
+
+    assert hasattr(tables, "generate_table_ii")
+    assert hasattr(tables, "generate_table_iii")
+    assert hasattr(tables, "generate_table_iv")
+    assert hasattr(tables, "generate_table_iv_c")
+    assert hasattr(tables, "generate_table_v")
+    assert hasattr(tables, "generate_table_vi")
+    assert hasattr(tables, "generate_table_vii")
+    assert hasattr(tables, "generate_table_viii")
+    assert hasattr(tables, "generate_table_ix")
+    assert hasattr(tables, "generate_paper_numbers")
+    assert hasattr(figures, "generate_fig1_risk_coverage")
+    assert hasattr(figures, "generate_fig2_reliability")
 
