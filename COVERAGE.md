@@ -15,9 +15,9 @@ This matrix tracks the implementation and test status of every paper element and
 | [x] | S5 | 6 | `c1/signals.py`, `c1/stages.py` | `compute_s5`, `build_codes_stage` | `codes.csv` | M3 |
 | [x] | Labels correct/invalid/unsupported | 5.3 | `c1/label.py`, `c1/stages.py` | `label_code`, `label_note_codes`, `build_codes_stage` | `codes.csv` | M3 |
 | [ ] | Table I (definitions) | — | text only | — | — | — |
-| [ ] | AUROC, ECE; Table III; Fig. 2 | 7, 14 | `metrics.py`, `figures.py` | — | `metrics_signals.csv` | M4 |
-| [ ] | Thresholds (dev) | 8 | `thresholds.py` | — | `thresholds.json` | M4 |
-| [ ] | Table IV(a)(b)(c); Fig. 1 | 7–9, 14 | `metrics.py`, `controls.py` | — | `results_test.csv`, `results_controls.csv` | M4 |
+| [x] | AUROC, ECE; Table III; Fig. 2 | 7, 14 | `c1/metrics.py`, `c1/stages.py` | `compute_auroc`, `compute_ece`, `run_analyze_stage` | `metrics_signals.csv` | M4 |
+| [x] | Thresholds (dev) | 8 | `c1/thresholds.py`, `c1/stages.py` | `pick_tau`, `compute_dev_thresholds`, `save_thresholds` | `thresholds.json` | M4 |
+| [x] | Table IV(a)(b)(c); Fig. 1 | 7–9, 14 | `c1/metrics.py`, `c1/controls.py`, `c1/stages.py` | `compute_kept_metrics`, `run_random_control`, `run_oracle_control`, `run_analyze_stage` | `results_test.csv`, `results_controls.csv` | M4 |
 | [ ] | Table V + verdict + recommendation | 10 | `bootstrap.py` | — | `bootstrap.csv`, `recommendation.csv` | M5 |
 | [ ] | Table VI + confident mistakes | 11 | `breakdown.py` | — | `by_feature.csv`, `confident_mistakes.csv` | M5 |
 | [ ] | Table VII cost | 12 | `cost.py`, `c1/stages.py` | `append_cost_record` | `cost.csv`, `cost_log.jsonl` | M5 |
@@ -104,4 +104,20 @@ This matrix tracks the implementation and test status of every paper element and
 - `c1.signals.compute_s5`: Composite signal mean (S1 + S4) / 2 (SPEC §6)
 - `c1.stages.build_codes_stage`: Stage runner joining stage outputs with corpus and vocabulary to produce codes.csv and logging s3_post costs (SPEC §4, §12)
 - `c1.cli.run_build_codes_cli`: CLI handler for c1 build-codes (SPEC §4)
+
+## Milestone M4 Implemented Functions Traceability
+
+- `c1.metrics.compute_auroc`: Rank-based AUROC with average ranks for tied scores and nan handling (SPEC §7, §15)
+- `c1.metrics.compute_ece`: Expected Calibration Error across 10 equal-width bins on [0, 1] (SPEC §7, §15)
+- `c1.metrics.KeptMetrics`: Dataclass container for kept-set metrics (SPEC §7)
+- `c1.metrics.compute_kept_metrics`: Evaluates coverage, precision, recall, micro-F1, UCR, ICR, and review load (SPEC §7, §15)
+- `c1.thresholds.pick_tau`: Finds largest tau such that dev codes share >= target_coverage (SPEC §8, §15)
+- `c1.thresholds.compute_dev_thresholds`: Guarded threshold selection strictly from dev codes (SPEC §8)
+- `c1.thresholds.save_thresholds`: Writes thresholds.json with dev_codes_hash (SPEC §8)
+- `c1.thresholds.load_thresholds`: Reads and parses thresholds.json (SPEC §8)
+- `c1.controls.run_random_control`: Vectorized random withholding across 100 repeats (SPEC §9, §15)
+- `c1.controls.run_oracle_control`: Deterministic oracle control keeping correct codes first (SPEC §9, §15)
+- `c1.stages.run_analyze_stage`: Orchestrator writing thresholds.json, metrics_signals.csv, results_test.csv, results_controls.csv (SPEC §4)
+- `c1.cli.run_analyze_cli`: CLI handler for c1 analyze (SPEC §4)
+
 

@@ -21,3 +21,5 @@ This document records ambiguities in the paper and the defaults adopted, as spec
 | A15 | S4 zero probability fallback | If $P(\text{Yes}) + P(\text{No}) \le 10^{-12}$, S4 = 0.5 with warning log (SPEC §6) |
 | A16 | `codes.csv` empty-field representation | For correct codes, `cause_tag` is empty string `""`; for wrong codes, `gold_type` and `gold_rare` are empty string `""` (SPEC §4, §5.3) |
 | A17 | `position` indexing in `codes.csv` | 1-indexed (1 to N) representing the order of codes in greedy `pred` list (SPEC §4) |
+| A18 | ECE for non-probability signals | ECE is undefined for S1 and S5 (not calibrated probabilities); stored as NaN in computations and empty string in CSV (SPEC §7, §14) |
+| A19 | Zero denominators in kept metrics | Evaluates to NaN (or 0.0 for F1 when P+R == 0) per SPEC §7 zero-denominator rule |

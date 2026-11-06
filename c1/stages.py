@@ -27,8 +27,10 @@ from c1.backend import (
     compute_s4_score,
 )
 from c1.codes import Vocabulary
+from c1.controls import run_oracle_control, run_random_control
 from c1.data import Note, load_corpus, load_split
 from c1.label import label_code
+from c1.metrics import compute_auroc, compute_ece, compute_kept_metrics
 from c1.parse import parse_greedy_output, parse_s2_output
 from c1.prompts import (
     DEFAULT_MAX_NOTE_WORDS,
@@ -45,14 +47,18 @@ from c1.signals import (
     extract_s2,
     extract_s4,
 )
+from c1.thresholds import compute_dev_thresholds, save_thresholds
 from c1.utils import (
     Config,
     append_jsonl,
     read_jsonl_resume,
+    sha256_string,
     write_csv_atomic,
     write_json_atomic,
     write_run_meta,
 )
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -936,5 +942,191 @@ def build_codes_stage(
 
     logger.info("Successfully built codes.csv at %s (%d rows)", codes_file, len(all_rows))
     return codes_file, stats
+
+
+# ---------------------------------------------------------------------------
+# Stage 6: Analyze (Milestone M4)
+# ---------------------------------------------------------------------------
+
+
+def run_analyze_stage(
+    config: Config,
+    out_dir: str | Path,
+) -> dict[str, Any]:
+    """Execute analysis producing thresholds.json, metrics_signals.csv, results_test.csv, and results_controls.csv.
+
+    Traces to SPEC §4, §7, §8, §9, §14.
+    """
+    out_p = Path(out_dir)
+    codes_file = out_p / "codes.csv"
+    if not codes_file.is_file():
+        raise FileNotFoundError(
+            f"codes.csv not found in {out_p}. Run build-codes stage first."
+        )
+
+    codes_df = pd.read_csv(codes_file)
+    models = sorted(codes_df["model"].unique())
+
+    # Load corpus notes and split to determine gold code and note totals per split
+    vocab = Vocabulary.load_default()
+    corpus_file = Path(config.paths.data_dir) / "corpus.jsonl"
+    corpus_notes = load_corpus(corpus_file, vocab)
+
+    split_file = Path(config.paths.data_dir) / "split.csv"
+    if not split_file.is_file():
+        split_file = out_p / "split.csv"
+    split_map = load_split(split_file) if split_file.is_file() else {}
+
+    test_notes = [n for n in corpus_notes if split_map.get(n.id) == "test"]
+    total_test_notes = len(test_notes)
+    total_test_gold = sum(len(n.gold) for n in test_notes)
+
+    dev_notes = [n for n in corpus_notes if split_map.get(n.id) == "dev"]
+    total_dev_notes = len(dev_notes)
+    total_dev_gold = sum(len(n.gold) for n in dev_notes)
+
+    signals = ("s1", "s2", "s3", "s4", "s5")
+    targets = tuple(config.coverage_targets)
+
+    # 1. Dev thresholds (SPEC §8)
+    thresholds_by_model: dict[str, dict[str, dict[str, float]]] = {}
+    for m in models:
+        dev_df = codes_df[(codes_df["model"] == m) & (codes_df["split"] == "dev")].copy()
+        thresholds_by_model[m] = compute_dev_thresholds(dev_df, signals=signals, targets=targets)
+
+    dev_rows = codes_df[codes_df["split"] == "dev"].to_csv(index=False)
+    dev_hash = sha256_string(dev_rows)
+    thresholds_path = save_thresholds(out_p, thresholds_by_model, dev_hash)
+
+    # 2. Metrics signals (Table III, SPEC §7, §14)
+    metrics_rows: list[dict[str, Any]] = []
+    for m in models:
+        for split_label in ("test", "dev"):
+            split_df = codes_df[(codes_df["model"] == m) & (codes_df["split"] == split_label)]
+            for sig in signals:
+                if sig not in split_df.columns:
+                    continue
+                auroc = compute_auroc(split_df["correct"], split_df[sig])
+                ece = compute_ece(split_df["correct"], split_df[sig], n_bins=config.ece_bins) if sig in ("s2", "s3", "s4") else float("nan")
+
+                metrics_rows.append({
+                    "model": m,
+                    "split": split_label,
+                    "signal": sig,
+                    "auroc": round(auroc, 6) if not np.isnan(auroc) else "",
+                    "ece": round(ece, 6) if not np.isnan(ece) else "",
+                })
+
+    metrics_file = out_p / "metrics_signals.csv"
+    write_csv_atomic(metrics_file, metrics_rows, fieldnames=["model", "split", "signal", "auroc", "ece"])
+
+    # 3. Test results across target coverages (Table IV(a)(b), SPEC §7, §8, §14)
+    results_test_rows: list[dict[str, Any]] = []
+    results_controls_rows: list[dict[str, Any]] = []
+
+    for m in models:
+        test_df = codes_df[(codes_df["model"] == m) & (codes_df["split"] == "test")].copy()
+        n_pred = len(test_df)
+
+        for sig in signals:
+            for target in targets:
+                tau = thresholds_by_model[m][sig][str(target)]
+
+                if target >= 1.0 or tau == -float("inf") or np.isneginf(tau):
+                    kept_df = test_df
+                    tau_str = "-inf"
+                else:
+                    kept_df = test_df[test_df[sig] >= tau]
+                    tau_str = str(round(tau, 6))
+
+                c_count = int(kept_df["correct"].sum())
+                u_count = int(kept_df["unsupported"].sum())
+                inv_count = int(kept_df["invalid"].sum())
+
+                km = compute_kept_metrics(
+                    kept_correct=c_count,
+                    kept_unsupported=u_count,
+                    kept_invalid=inv_count,
+                    total_predicted=n_pred,
+                    total_gold=total_test_gold,
+                    total_notes=total_test_notes,
+                )
+
+                row_dict = {
+                    "model": m,
+                    "signal": sig,
+                    "target_coverage": target,
+                    "tau": tau_str,
+                    "realised_coverage": round(km.coverage, 6) if not np.isnan(km.coverage) else "",
+                    "kept_count": km.kept_count,
+                    "precision": round(km.precision, 6) if not np.isnan(km.precision) else "",
+                    "recall": round(km.recall, 6) if not np.isnan(km.recall) else "",
+                    "micro_f1": round(km.micro_f1, 6) if not np.isnan(km.micro_f1) else "",
+                    "ucr": round(km.ucr, 6) if not np.isnan(km.ucr) else "",
+                    "icr": round(km.icr, 6) if not np.isnan(km.icr) else "",
+                    "review_load": round(km.review_load, 6) if not np.isnan(km.review_load) else "",
+                }
+                results_test_rows.append(row_dict)
+
+                # 4. Controls paired at realised coverage (SPEC §9)
+                realised_c = km.coverage
+                rand_ctrl = run_random_control(
+                    test_df=test_df,
+                    realised_coverage=realised_c,
+                    total_gold=total_test_gold,
+                    total_notes=total_test_notes,
+                    repeats=config.random_control.repeats,
+                    seed=config.random_control.seed,
+                )
+                oracle_ctrl = run_oracle_control(
+                    test_df=test_df,
+                    realised_coverage=realised_c,
+                    total_gold=total_test_gold,
+                    total_notes=total_test_notes,
+                )
+
+                for ctrl_type, ctrl_metrics in (("random", rand_ctrl), ("oracle", oracle_ctrl)):
+                    results_controls_rows.append({
+                        "model": m,
+                        "signal": sig,
+                        "target_coverage": target,
+                        "realised_coverage": round(realised_c, 6) if not np.isnan(realised_c) else "",
+                        "control_type": ctrl_type,
+                        "precision": round(ctrl_metrics["precision"], 6) if not np.isnan(ctrl_metrics["precision"]) else "",
+                        "recall": round(ctrl_metrics["recall"], 6) if not np.isnan(ctrl_metrics["recall"]) else "",
+                        "micro_f1": round(ctrl_metrics["micro_f1"], 6) if not np.isnan(ctrl_metrics["micro_f1"]) else "",
+                        "ucr": round(ctrl_metrics["ucr"], 6) if not np.isnan(ctrl_metrics["ucr"]) else "",
+                        "icr": round(ctrl_metrics["icr"], 6) if not np.isnan(ctrl_metrics["icr"]) else "",
+                        "review_load": round(ctrl_metrics["review_load"], 6) if not np.isnan(ctrl_metrics["review_load"]) else "",
+                    })
+
+    test_results_file = out_p / "results_test.csv"
+    test_cols = [
+        "model", "signal", "target_coverage", "tau", "realised_coverage", "kept_count",
+        "precision", "recall", "micro_f1", "ucr", "icr", "review_load"
+    ]
+    write_csv_atomic(test_results_file, results_test_rows, fieldnames=test_cols)
+
+    controls_file = out_p / "results_controls.csv"
+    controls_cols = [
+        "model", "signal", "target_coverage", "realised_coverage", "control_type",
+        "precision", "recall", "micro_f1", "ucr", "icr", "review_load"
+    ]
+    write_csv_atomic(controls_file, results_controls_rows, fieldnames=controls_cols)
+
+    write_run_meta(out_p, config, extra={"command": "analyze", "milestone": "M4"})
+
+    summary = {
+        "models": models,
+        "metrics_signals_file": str(metrics_file),
+        "thresholds_file": str(thresholds_path),
+        "results_test_file": str(test_results_file),
+        "results_controls_file": str(controls_file),
+        "total_test_rows": len(results_test_rows),
+        "total_control_rows": len(results_controls_rows),
+    }
+    logger.info("Completed M4 analyze stage: %s", summary)
+    return summary
+
 
 

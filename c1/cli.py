@@ -326,6 +326,29 @@ def run_build_codes_cli(args: argparse.Namespace) -> int:
             backend.unload()
 
 
+def run_analyze_cli(args: argparse.Namespace) -> int:
+    """Handler for 'c1 analyze'."""
+    from c1.stages import run_analyze_stage
+    from c1.utils import load_config
+
+    config = load_config(args.config)
+    out_dir = Path(args.out) if args.out else Path(config.paths.out_dir) / config.run_id
+    if not out_dir.is_dir():
+        mock_dir = Path("outputs_mock") / config.run_id
+        if mock_dir.is_dir():
+            out_dir = mock_dir
+
+    summary = run_analyze_stage(config, out_dir)
+
+    print("\n=== Analysis Summary (Milestone M4) ===")
+    print(f"Models: {', '.join(summary['models'])}")
+    print(f"Saved: {summary['thresholds_file']}")
+    print(f"Saved: {summary['metrics_signals_file']}")
+    print(f"Saved: {summary['results_test_file']} ({summary['total_test_rows']} rows)")
+    print(f"Saved: {summary['results_controls_file']} ({summary['total_control_rows']} rows)\n")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point dispatching to pipeline stage handlers.
 
@@ -372,8 +395,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "build-codes":
         return run_build_codes_cli(args)
 
+    if args.command == "analyze":
+        return run_analyze_cli(args)
+
     stubs: dict[str, str] = {
-        "analyze": "Milestone M4",
         "figures": "Milestone M6",
         "sanity": "Milestone M6",
         "paper-numbers": "Milestone M6",
