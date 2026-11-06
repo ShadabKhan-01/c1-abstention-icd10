@@ -29,3 +29,4 @@ This document records ambiguities in the paper and the defaults adopted, as spec
 | A23 | Bootstrap confidence interval calculation | Empirical percentile 95% intervals computed via `[np.percentile(samples, 2.5), np.percentile(samples, 97.5)]` (SPEC §10) |
 | A24 | Tables and figures mock data mixing guard | Mock outputs and `outputs_mock` path rejected in production mode; allowed with `--allow-mock` which stamps `MOCK DATA` on markdown, CSV, and PNG reports (SPEC §14, §15, AGENTS.md §2) |
 | A25 | Sanity report prerequisite | `tables` and `figures` require `sanity_report.json` with `passed == true` before generating reports (SPEC §15) |
+| A26 | Thin Colab notebooks | Notebooks contain zero data/metric processing logic; cells exclusively mount Drive, clone repo, set secrets, and invoke CLI commands (AGENTS.md §3, SPEC §16) |

@@ -14,7 +14,7 @@ This matrix tracks the implementation and test status of every paper element and
 | [x] | S4 yes/no | 6 | `c1/prompts.py`, `c1/backend.py`, `c1/stages.py` | `format_s4_prompt`, `compute_s4_score`, `run_s4_stage` | `s4.jsonl` | M2 |
 | [x] | S5 | 6 | `c1/signals.py`, `c1/stages.py` | `compute_s5`, `build_codes_stage` | `codes.csv` | M3 |
 | [x] | Labels correct/invalid/unsupported | 5.3 | `c1/label.py`, `c1/stages.py` | `label_code`, `label_note_codes`, `build_codes_stage` | `codes.csv` | M3 |
-| [ ] | Table I (definitions) | — | text only | — | — | — |
+| [x] | Table I (definitions) | 6 | `README.md`, `SPEC.md §6` | Signal S1–S5 definitions & abstention rule | `README.md` | M7 |
 | [x] | AUROC, ECE; Table III; Fig. 2 | 7, 14 | `c1/metrics.py`, `c1/stages.py` | `compute_auroc`, `compute_ece`, `run_analyze_stage` | `metrics_signals.csv` | M4 |
 | [x] | Thresholds (dev) | 8 | `c1/thresholds.py`, `c1/stages.py` | `pick_tau`, `compute_dev_thresholds`, `save_thresholds` | `thresholds.json` | M4 |
 | [x] | Table IV(a)(b)(c); Fig. 1 | 7–9, 14 | `c1/metrics.py`, `c1/controls.py`, `c1/stages.py` | `compute_kept_metrics`, `run_random_control`, `run_oracle_control`, `run_analyze_stage` | `results_test.csv`, `results_controls.csv` | M4 |
@@ -29,6 +29,7 @@ This matrix tracks the implementation and test status of every paper element and
 | [x] | In-text numbers & Tables II–IX & Figures 1–2 | 14 | `c1/tables.py`, `c1/figures.py`, `c1/cli.py` | `run_all_tables`, `run_all_figures`, `generate_paper_numbers`, `run_tables_cli`, `run_figures_cli` | `reports/table_*.md/.csv`, `reports/fig*.png`, `reports/paper_numbers.md` | M6 |
 | [x] | Reproducibility record & utils | 4 | `c1/utils.py` | `set_seed`, `load_config`, `write_json_atomic`, `write_csv_atomic`, `append_jsonl`, `read_jsonl_resume`, `get_completed_ids`, `sha256_file`, `sha256_string`, `write_run_meta` | `run_meta.json` | M0 |
 | [x] | CLI Scaffolding & Generation Runners | 4 | `c1/cli.py` | `main`, `build_parser`, `run_pipeline_cli`, `run_selfcheck_cli`, `run_estimate_cli` | CLI entry point | M0, M2 |
+| [x] | Notebooks, Run Guide, Scope Audit | 3, 16, 18 | `notebooks/`, `README.md`, `SCOPE_AUDIT.md` | `01_run_model.ipynb`, `02_analysis.ipynb`, `README.md`, `SCOPE_AUDIT.md` | `notebooks/*.ipynb`, `README.md`, `SCOPE_AUDIT.md` | M7 |
 
 ## Milestone M0 Implemented Functions Traceability
 
@@ -167,6 +168,14 @@ This matrix tracks the implementation and test status of every paper element and
 - `c1.cli.run_tables_cli`: CLI handler for c1 tables (SPEC §14)
 - `c1.cli.run_figures_cli`: CLI handler for c1 figures (SPEC §14)
 - `c1.cli.run_paper_numbers_cli`: CLI handler for c1 paper-numbers (SPEC §14)
+
+## Milestone M7 Implemented Functions Traceability
+
+- `notebooks.01_run_model`: GPU execution notebook following Part 3 of PROMPTS_AND_RUNBOOK.md (SPEC §3, §16)
+- `notebooks.02_analysis`: CPU analysis, tables, and figures execution notebook (SPEC §14, §16)
+- `README.md`: Comprehensive paper run guide, Table I definitions, and Colab Pro/mock execution instructions (SPEC §0, §6, §16)
+- `SCOPE_AUDIT.md`: Exhaustive file and function traceability audit and negative scope verification (SPEC §18, AGENTS.md §1)
+
 
 
 
