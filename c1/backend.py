@@ -643,6 +643,7 @@ class HFBackend(BaseBackend):
                 max_new_tokens=max_new_tokens,
                 eos_token_id=self._eos_token_ids,
                 pad_token_id=self.tokenizer.pad_token_id,
+                return_dict_in_generate=True,
             )
         elapsed = time.perf_counter() - start_t
 
