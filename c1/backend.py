@@ -574,12 +574,16 @@ class HFBackend(BaseBackend):
                     max_new_tokens=max_new_tokens,
                     eos_token_id=self._eos_token_ids,
                     pad_token_id=self.tokenizer.pad_token_id,
+                    return_dict_in_generate=True,
                 )
             elapsed = time.perf_counter() - start_t
             per_sample_elapsed = elapsed / max(k, 1)
 
             for i in range(k):
                 seq = outputs.sequences[i, prompt_len:]
+                eos_pos = [j for j, t in enumerate(seq.tolist()) if t in self._eos_token_ids]
+                if eos_pos:
+                    seq = seq[: eos_pos[0] + 1]  # drop batch padding after EOS
                 text = self.tokenizer.decode(seq, skip_special_tokens=True)
                 results.append(
                     GenOut(
@@ -605,6 +609,7 @@ class HFBackend(BaseBackend):
                         max_new_tokens=max_new_tokens,
                         eos_token_id=self._eos_token_ids,
                         pad_token_id=self.tokenizer.pad_token_id,
+                        return_dict_in_generate=True,
                     )
                 elapsed = time.perf_counter() - start_t
                 seq = outputs.sequences[0, prompt_len:]
