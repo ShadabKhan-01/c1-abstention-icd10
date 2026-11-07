@@ -156,7 +156,7 @@ def _create_backend(config: Any, model_name: str, backend_type: str) -> Any:
     return backend
 
 
-def _load_notes_and_vocab(config: Any, split_filter: str | None = None, limit: int | None = None) -> tuple[Any, list[Any]]:
+def _load_notes_and_vocab(config: Any, split_filter: str | None = None, limit: int | None = None, out_dir: str | Path | None = None) -> tuple[Any, list[Any]]:
     """Load vocabulary and filtered notes."""
     from c1.codes import Vocabulary
     from c1.data import load_corpus, load_split
@@ -167,9 +167,9 @@ def _load_notes_and_vocab(config: Any, split_filter: str | None = None, limit: i
     notes = load_corpus(corpus_file, vocab)
 
     if split_filter:
-        split_file = data_dir / "split.csv"
-        if not split_file.is_file():
-            split_file = Path(config.paths.out_dir) / config.run_id / "split.csv"
+        candidates = [Path(out_dir) / "split.csv"] if out_dir else []
+        candidates += [data_dir / "split.csv", Path(config.paths.out_dir) / config.run_id / "split.csv"]
+        split_file = next((c for c in candidates if c.is_file()), candidates[-1])
         if split_file.is_file():
             split_map = load_split(split_file)
             notes = [n for n in notes if split_map.get(n.id) == split_filter]
@@ -198,7 +198,7 @@ def run_pipeline_cli(args: argparse.Namespace) -> int:
     backend = _create_backend(config, model_name, args.backend)
 
     try:
-        vocab, notes = _load_notes_and_vocab(config, split_filter=args.split, limit=args.limit)
+        vocab, notes = _load_notes_and_vocab(config, split_filter=args.split, limit=args.limit, out_dir=getattr(args, "out", None))
         out_dir = get_stage_output_dir(config, backend, args.out)
 
         stages = [s.strip().lower() for s in args.stages.split(",") if s.strip()]
@@ -234,7 +234,7 @@ def run_selfcheck_cli(args: argparse.Namespace) -> int:
     backend = _create_backend(config, model_name, args.backend)
 
     try:
-        vocab, notes = _load_notes_and_vocab(config, split_filter="dev")
+        vocab, notes = _load_notes_and_vocab(config, split_filter="dev", out_dir=getattr(args, "out", None))
         out_dir = get_stage_output_dir(config, backend, args.out)
         report = run_selfcheck(config, model_name, backend, vocab, notes, out_dir)
 
@@ -262,7 +262,7 @@ def run_estimate_cli(args: argparse.Namespace) -> int:
     backend = _create_backend(config, model_name, args.backend)
 
     try:
-        vocab, notes = _load_notes_and_vocab(config, split_filter="dev")
+        vocab, notes = _load_notes_and_vocab(config, split_filter="dev", out_dir=getattr(args, "out", None))
         res = run_estimate(config, model_name, backend, vocab, notes, sample_size=args.sample_size)
 
         print("\n=== Runtime Estimation (SPEC §16) ===")
@@ -297,9 +297,9 @@ def run_build_codes_cli(args: argparse.Namespace) -> int:
         vocab = Vocabulary.load_default()
         notes = load_corpus(data_dir / "corpus.jsonl", vocab)
 
-        split_file = data_dir / "split.csv"
-        if not split_file.is_file():
-            split_file = Path(config.paths.out_dir) / config.run_id / "split.csv"
+        candidates = [Path(args.out) / "split.csv"] if args.out else []
+        candidates += [data_dir / "split.csv", Path(config.paths.out_dir) / config.run_id / "split.csv"]
+        split_file = next((c for c in candidates if c.is_file()), candidates[-1])
         split_map = load_split(split_file) if split_file.is_file() else {}
 
         out_dir = get_stage_output_dir(config, backend, args.out)

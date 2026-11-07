@@ -433,6 +433,7 @@ class HFBackend(BaseBackend):
             self.model_id,
             quantization_config=bnb_config,
             device_map="auto",
+            use_safetensors=True,  # never unpickle .bin weights (BioMistral ships both)
         )
         self.model.eval()
 
