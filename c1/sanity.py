@@ -55,7 +55,8 @@ def check_file_completeness(
     stage_counts_only: bool = False,
 ) -> dict[str, Any]:
     """Check required output files exist and are non-empty."""
-    expected = list(REQUIRED_STAGE_FILES)
+    # codes.csv is built later (notebook 02), so the post-generation check skips it.
+    expected = [f for f in REQUIRED_STAGE_FILES if not (stage_counts_only and f == "codes.csv")]
     if not stage_counts_only:
         expected.extend(REQUIRED_ANALYSIS_FILES)
 
