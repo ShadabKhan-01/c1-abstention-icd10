@@ -292,14 +292,15 @@ def make_corpus_from_config(
 
     Args:
         config_path: Path to configuration YAML.
-        out_override: Optional path to override data directory.
+        out_override: Accepted for CLI symmetry; ignored. The corpus always goes to
+            ``paths.data_dir`` (SPEC §4), where every later stage reads it.
 
     Returns:
         Path to generated data/corpus.jsonl file.
     """
     cfg = load_config(config_path)
 
-    data_dir = Path(out_override) if out_override else Path(cfg.paths.data_dir)
+    data_dir = Path(cfg.paths.data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
     corpus_file = data_dir / "corpus.jsonl"
     stats_file = data_dir / "corpus_stats.json"
