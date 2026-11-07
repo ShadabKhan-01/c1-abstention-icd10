@@ -119,3 +119,13 @@ def test_s4_score_computation() -> None:
     assert compute_s4_score(0.0, 0.0) == 0.5
     assert compute_s4_score(1e-15, 1e-15) == 0.5
 
+
+
+def test_every_generate_call_returns_dict() -> None:
+    """Every HF generate() call must set return_dict_in_generate (code reads .sequences)."""
+    import re
+    from pathlib import Path
+
+    src = Path("c1/backend.py").read_text(encoding="utf8")
+    calls = re.findall(r"self\.model\.generate\((.*?)\n\s*\)", src, flags=re.S)
+    assert calls and all("return_dict_in_generate=True" in c for c in calls)
