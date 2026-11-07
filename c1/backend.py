@@ -493,6 +493,12 @@ class HFBackend(BaseBackend):
         else:
             return f"[INST] {prompt} [/INST]", "inst_tags"
 
+    def load_tokenizer_only(self) -> None:
+        """Load just the tokenizer (CPU, no GPU/model), for build-codes S3 decoding."""
+        from transformers import AutoTokenizer
+
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
+
     def decode_tokens(self, token_ids: Sequence[int]) -> str:
         return self.tokenizer.decode(token_ids, skip_special_tokens=True)
 

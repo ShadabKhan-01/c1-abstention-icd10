@@ -134,7 +134,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _create_backend(config: Any, model_name: str, backend_type: str) -> Any:
+def _create_backend(config: Any, model_name: str, backend_type: str, tokenizer_only: bool = False) -> Any:
     """Instantiate and initialize backend."""
     if backend_type == "mock":
         from c1.backend import MockBackend
@@ -152,7 +152,10 @@ def _create_backend(config: Any, model_name: str, backend_type: str) -> Any:
         compute_dtype=config.quantisation.compute_dtype,
         double_quant=config.quantisation.double_quant,
     )
-    backend.load()
+    if tokenizer_only:
+        backend.load_tokenizer_only()
+    else:
+        backend.load()
     return backend
 
 
@@ -290,7 +293,7 @@ def run_build_codes_cli(args: argparse.Namespace) -> int:
 
     config = load_config(args.config)
     model_name = args.model or "llama3"
-    backend = _create_backend(config, model_name, args.backend)
+    backend = _create_backend(config, model_name, args.backend, tokenizer_only=True)  # S3 decode needs only the tokenizer
 
     try:
         data_dir = Path(config.paths.data_dir)
