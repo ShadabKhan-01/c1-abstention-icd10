@@ -38,13 +38,16 @@ The user copies the earlier repo's generator and vocabulary modules into `vendor
 ## 2. Configuration defaults (`configs/c1.yaml`)
 
 ```yaml
-run_id: c1_run01
+run_id: c1_run02
 paths: {data_dir: data, out_dir: outputs}        # out_dir will point to Google Drive on Colab
 corpus: {n_notes: 300, generator_seed: 2026}
 split: {dev_fraction: 0.30, seed: 2026}
-models:
-  llama3: {hf_id: meta-llama/Meta-Llama-3-8B-Instruct, context: 8192}
+models:            # author decision A27: four models are run; llama3 is kept but not run
+  qwen: {hf_id: Qwen/Qwen2.5-7B-Instruct, context: 32768}
   biomistral: {hf_id: BioMistral/BioMistral-7B, context: 2048}
+  med42: {hf_id: m42-health/Llama3-Med42-8B, context: 8192}
+  gemma: {hf_id: google/gemma-2-9b-it, context: 8192, compute_dtype: bfloat16}
+  llama3: {hf_id: meta-llama/Meta-Llama-3-8B-Instruct, context: 8192}
 quantisation: {type: nf4, compute_dtype: float16, double_quant: true}
 decoding:
   greedy: {do_sample: false, max_new_tokens: 200}
@@ -71,7 +74,7 @@ k_sensitivity: [3, 5, 10]
   3. `generate_text(prompt, max_new_tokens)` (greedy, used by S2).
   4. `next_token_probs(prompt, token_ids) -> dict` (single forward pass, no generation, used by S4): returns the softmax probability of each requested first-token id at the answer position.
 - Chat formatting: **single user message** (no system role) rendered with `tokenizer.apply_chat_template(..., add_generation_prompt=True)`; if a tokenizer has no chat template use the model's documented `[INST] … [/INST]` form. Record `template_mode`.
-- LLaMA-3 stop tokens: `eos_token_id=[tokenizer.eos_token_id, tokenizer.convert_tokens_to_ids("<|eot_id|>")]`. Decode **only new tokens**. Set `pad_token_id` if missing.
+- Stop tokens: `tokenizer.eos_token_id` plus the chat format's end-of-turn token when the tokenizer has it (`<|eot_id|>`, `<|im_end|>`, `<end_of_turn>`). Decode **only new tokens**. Set `pad_token_id` if missing.
 - Truncation: the note is truncated **identically for both models** by a shared `max_note_words` computed once so that the longest prompt (S2: prompt + note + code list + 200 new tokens) fits BioMistral's 2048-token window. Log the number of truncated notes per model; never truncate the instruction or code list.
 - Batch size 1 for greedy/S2/S3 (determinism). Free GPU memory between models.
 - `MockBackend`: deterministic fake outputs with plausible token probabilities, for CPU tests only (`"backend":"mock"`).
@@ -110,8 +113,8 @@ Cost logging: every stage appends to `cost_log.jsonl` per (model, note, stage �
 - The base prompt text is the earlier paper's Appendix-B wording; if the repo's vendor code contains the earlier paper's exact string, use that instead and say so in `COVERAGE.md`. Prompts may be changed **only before any test-split result is generated**; `sanity` fails if one model's outputs mix prompt hashes.
 
 ### 5.2 Parsing (`c1/parse.py`, shared by greedy, samples, S2)
-Line-based: strip a leading list marker (`-`, `*`, `•`, `1.`, `1)`), take the code at the start of the line (case-insensitive, then upper-case; allow trailing text after whitespace/punctuation), normalise (insert dot if missing), keep if it matches the well-formed pattern. De-duplicate preserving first occurrence. **Never repair or replace invalid codes.** `parse_failed = (no code parsed)`. Aggregate parse-failure counts per model.
-S2 lines: `CODE, SCORE` (tolerate `:` or whitespace as separator and a trailing `%`); score clipped to [0,100] then /100. Codes in the S2 answer are matched to the greedy list by normalised string; any greedy code with no readable score gets **S2 = 0 and `s2_failed=True`**; report the S2 failure rate per model.
+Line-based: ignore a leading list marker (`-`, `*`, `•`, `1.`, `1)`), take **every code anywhere in the line** (case-insensitive, then upper-case; not touching other letters/digits; models write `Gout (M10.0)`), normalise (insert dot if missing), keep if it matches the well-formed pattern. A 3-character code without a dot directly after a word (`Vitamin B12`) is text, not a code (A28). De-duplicate preserving first occurrence. **Never repair or replace invalid codes.** `parse_failed = (no code parsed)`. Aggregate parse-failure counts per model.
+S2 lines: `CODE, SCORE` (tolerate `:` or whitespace as separator and a trailing `%`); otherwise the first greedy code in the line with the last number after it (A29); score clipped to [0,100] then /100. Codes in the S2 answer are matched to the greedy list by normalised string; any greedy code with no readable score gets **S2 = 0 and `s2_failed=True`**; report the S2 failure rate per model.
 
 ### 5.3 Labelling (`c1/label.py`)
 For each predicted code: `invalid` = not valid in the vocabulary; `correct` = in the note's gold set; `unsupported` = valid and not in gold. Exactly one is true. Test: counts of the three sum to the number of predicted codes. `cause_tag` for wrong codes: `negated` / `family_history` / `distractor_medication` if the code equals a recorded distractor code of that note (kind of that distractor; if several, take the first in the order negated, family_history, distractor_medication), else `other`. `gold_type`/`gold_rare` for correct codes from the gold entry.

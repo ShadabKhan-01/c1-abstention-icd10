@@ -61,7 +61,8 @@ def test_set_seed() -> None:
 def test_load_default_config() -> None:
     """Verify loading the repository default configs/c1.yaml."""
     cfg = load_config("configs/c1.yaml")
-    assert cfg.run_id == "c1_run01"
+    assert cfg.run_id == "c1_run02"
+    assert {"qwen", "biomistral", "med42", "gemma"} <= set(cfg.models)
     assert cfg.paths.data_dir == "data"
     assert cfg.paths.out_dir == "outputs"
     assert cfg.corpus.n_notes == 300

@@ -1,5 +1,7 @@
 # PROMPTS_AND_RUNBOOK.md — How to build paper C1 with Antigravity and run it on Colab Pro
 
+> **Current run steps are in `README.md` §5.** This file is the original build log: it still names the two-model design, `c1_run01` and a Drive model cache, all superseded (ASSUMPTIONS A27, A31).
+
 Three files go into the **root of your new repo**: `AGENTS.md` (rules), `SPEC.md` (the full specification), and this file (for you, not for the agent).
 
 ---

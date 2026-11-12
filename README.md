@@ -8,13 +8,13 @@ A reproducible reference implementation of the research paper **"Confidence-Base
 
 Clinical large language models (LLMs) deployed for automated ICD-10-CM diagnosis coding can generate non-existent codes (*invalid*) or codes unsupported by patient clinical documentation (*unsupported* / hallucinations). This project evaluates whether computing post-generation confidence signals for each predicted code allows an automated system to withhold low-confidence predictions, improving overall precision and lowering the Unsupported Code Rate (UCR) while controlling the Invalid Code Rate (ICR).
 
-Two open-weight models are evaluated across a synthetic clinical-note corpus:
-1. **LLaMA-3-8B-Instruct** (`meta-llama/Meta-Llama-3-8B-Instruct`, context limit 8,192 tokens)
-2. **BioMistral-7B** (`BioMistral/BioMistral-7B`, context limit 2,048 tokens)
+Four open-weight models are evaluated across a synthetic clinical-note corpus (keys from `configs/c1.yaml`):
+1. `qwen` — **Qwen2.5-7B-Instruct** (`Qwen/Qwen2.5-7B-Instruct`)
+2. `biomistral` — **BioMistral-7B** (`BioMistral/BioMistral-7B`, context limit 2,048 tokens)
+3. `med42` — **Llama3-Med42-8B** (`m42-health/Llama3-Med42-8B`)
+4. `gemma` — **Gemma-2-9B-it** (`google/gemma-2-9b-it`, gated; computes in bfloat16)
 
-Five confidence signals (**S1–S5**) are calculated for every predicted code and evaluated against a **random-withholding control** (100 repeats) and an empirical **oracle control**.
-
----
+The paper draft names LLaMA-3-8B-Instruct and BioMistral-7B; the model set was changed by the author (see `ASSUMPTIONS.md` A27). `llama3` stays in the config but is not run.
 
 ## 2. Table I: Confidence Signal Definitions and Decision Rule
 
@@ -85,8 +85,7 @@ c1-abstention-icd10/
 - **Runtime:** CUDA GPU with $\ge 12\text{ GB}$ VRAM (T4, L4, or A100).
 - **Disk Persistence:** Google Drive mounted at `/content/drive`.
 - **Secrets (Colab Secrets):**
-  - `HF_TOKEN`: Hugging Face User Access Token (with accepted Meta LLaMA-3 licence).
-  - `GH_TOKEN`: GitHub Personal Access Token (for cloning private repository).
+  - `HF_TOKEN`: Hugging Face User Access Token. Accept the licence on the `google/gemma-2-9b-it` model page (and on any other model page that asks) before running that model.
 - **Dependencies:** Specified in `requirements-colab.txt`. Torch and CUDA libraries come pre-installed in Colab.
 
 ### Local Development (CPU Environment)
@@ -100,43 +99,22 @@ c1-abstention-icd10/
 
 GPU execution strictly follows `PROMPTS_AND_RUNBOOK.md` Part 3 using thin notebooks that invoke the CLI.
 
-### Step 1: Execute `notebooks/01_run_model.ipynb` for LLaMA-3-8B-Instruct
-1. Open Google Colab and set runtime to **GPU** (T4 or higher).
-2. Open `notebooks/01_run_model.ipynb`.
-3. Set `MODEL = "llama3"`.
-4. Execute **Cells 1–5**:
-   - Checks GPU via `nvidia-smi`.
-   - Mounts Google Drive (`RUN = "/content/drive/MyDrive/c1_runs/c1_run01"`).
-   - Clones repository and installs `requirements-colab.txt`.
-   - Generates corpus (`c1 make-corpus`) and dev/test split (`c1 split`).
-5. Execute **Cell 6 (Gate A Checks)**:
-   - Runs `c1 selfcheck` and `c1 estimate`.
-   - Inspect output: verify greedy determinism passes, S3 token alignment displays visible tokens spelling codes, S4 top token is predominantly `Yes`/`No`, and projected runtime fits your compute unit budget.
-6. Execute **Cell 7 (Smoke Run)**:
-   - Runs 20 dev notes through all stages into `{RUN}_smoke`.
-   - Verifies all 5 confidence signals are populated without error.
-7. Execute **Cell 8 (Full Run)**:
-   - Resumable full execution across stages `greedy,samples,s2,s4`. Long stages write append-only JSONL with immediate flush and fsync.
-8. Execute **Cell 9**:
-   - Verifies note count parity across all generation files (`c1 sanity --stage-counts-only`).
+### Step 1: Run `notebooks/01_run_model.ipynb` once per model (GPU)
+1. Open `notebooks/01_run_model.ipynb` in Colab and set the runtime to **GPU** (T4 or higher).
+2. In **Cell 2** set `MODEL` to one of `"qwen"`, `"biomistral"`, `"med42"`, `"gemma"`.
+3. Run **Cells 1–5**: GPU check, Drive mount (`RUN = "/content/drive/MyDrive/c1_runs/c1_run02"`), clone + install, HF token, corpus + split.
+4. Run **Cell 6** (`selfcheck`, `estimate`): greedy determinism must pass, the S4 Yes/No rate should be near 100%, and the projected hours must fit your budget.
+5. Run **Cell 7** (smoke run, 20 notes into `{RUN}_smoke`).
+6. Run **Cell 8** (full run). It is resumable: if Colab disconnects, re-run Cells 1–4 and 8.
+7. Run **Cell 9** (note-count check).
+8. **Runtime → Disconnect and delete runtime**, then repeat from step 1 with the next model.
 
-### Step 2: Disconnect Runtime and Repeat for BioMistral-7B
-1. In Colab: **Runtime → Disconnect and delete runtime** (frees GPU resources and resets RAM).
-2. Change runtime to **GPU** and open `notebooks/01_run_model.ipynb`.
-3. Set `MODEL = "biomistral"`.
-4. Run Cells 1–4, 6–9 (skipping Cell 5 since corpus and split already exist in Drive).
+Model weights are cached on Colab's local disk (not Drive): Drive corrupts files of this size.
 
-### Step 3: Execute `notebooks/02_analysis.ipynb` (Analysis & Paper Reports)
-1. In Colab: Set runtime to **CPU** (standard free runtime is sufficient).
-2. Open `notebooks/02_analysis.ipynb` and run:
-   - Computes labels and signals (`c1 build-codes`) for both models.
-   - Computes metrics, dev thresholds, controls, bootstrap, and hypotheses (`c1 analyze`).
-   - Runs full runtime sanity verification (`c1 sanity`).
-   - Generates all markdown and CSV tables (`c1 tables`).
-   - Renders publication figures (`c1 figures`).
-   - Compiles in-text numbers (`c1 paper-numbers`).
+### Step 2: Run `notebooks/02_analysis.ipynb` (CPU is enough)
+One cell: `build-codes --model all` (every model that has been run), `analyze`, `sanity`, `tables`, `figures`, `paper-numbers`.
 
-All paper outputs are written directly to `/content/drive/MyDrive/c1_runs/c1_run01/reports/`.
+All paper outputs are written directly to `/content/drive/MyDrive/c1_runs/c1_run02/reports/`.
 
 ---
 
@@ -209,6 +187,7 @@ Upon completion of the pipeline, `outputs/<run_id>/` contains:
 - `table_III.md` / `table_III.csv`: Discrimination (AUROC) and calibration (ECE) across signals
 - `table_IVa_llama3.md` / `table_IVa_llama3.csv`: Risk-coverage progression for LLaMA-3-8B-Instruct
 - `table_IVb_biomistral.md` / `table_IVb_biomistral.csv`: Risk-coverage progression for BioMistral-7B
+- `table_IV_<model>.md` / `.csv`: the same table for every other model (`qwen`, `med42`, `gemma`)
 - `table_IVc.md` / `table_IVc.csv`: Headline summary (Full list vs ~80% target)
 - `table_V.md` / `table_V.csv`: Statistical verdict and signal recommendation
 - `table_VI.md` / `table_VI.csv`: Feature strata breakdown and reconciliation

@@ -35,7 +35,7 @@ import numpy as np
 import pandas as pd
 
 from c1.data import Note, load_corpus
-from c1.utils import Config, load_config, write_csv_atomic
+from c1.utils import Config, load_config, model_display_name, write_csv_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -194,11 +194,9 @@ def generate_table_ii(
             metrics["distinct_gold_codes"][label] = "0"
             metrics["share_implicit_pct"][label] = "—"
 
-    model_keys = ["llama3", "biomistral"]
-    model_display = {
-        "llama3": "mean_predicted_codes_per_note (LLaMA-3)",
-        "biomistral": "mean_predicted_codes_per_note (BioMistral)",
-    }
+    # One row per model: those with predictions, else the paper's two (shown as "—").
+    model_keys = sorted(model_predictions) if model_predictions else ["llama3", "biomistral"]
+    model_display = {k: f"mean_predicted_codes_per_note ({k})" for k in model_keys}
 
     for m_key in model_keys:
         disp_name = model_display[m_key]
@@ -217,8 +215,9 @@ def generate_table_ii(
         ("mean_gold_codes_per_note", "Mean gold codes / note"),
         ("distinct_gold_codes", "Distinct gold codes"),
         ("share_implicit_pct", "Share of gold codes that are implicit"),
-        (model_display["llama3"], "Mean predicted codes / note (LLaMA-3-8B-Instruct)"),
-        (model_display["biomistral"], "Mean predicted codes / note (BioMistral-7B)"),
+    ] + [
+        (model_display[k], f"Mean predicted codes / note ({model_display_name(config, k)})")
+        for k in model_keys
     ]
 
     for key, human_label in display_order:
@@ -445,11 +444,12 @@ def generate_table_iv(
         df = pd.DataFrame(rows)
         footnote = make_standard_footnote(config, best_signals={m: best_sig})
 
-        suffix = "a_llama3" if "llama" in m.lower() else "b_biomistral"
-        model_title = f"LLaMA-3-8B-Instruct (Best signal: {best_sig.upper()})" if "llama" in m.lower() else f"BioMistral-7B (Best signal: {best_sig.upper()})"
+        # The paper's two models keep their (a)/(b) file names; any other model gets its key.
+        suffix = {"llama3": "a_llama3", "biomistral": "b_biomistral"}.get(m, f"_{m}")
+        model_title = f"{model_display_name(config, m)} (Best signal: {best_sig.upper()})"
 
         md_lines = [
-            f"# Table IV({suffix[0]}): Abstention Performance — {model_title}",
+            f"# Table IV: Abstention Performance — {model_title}",
             "",
             "| Setting | Coverage | Precision | Recall | Micro-F1 | UCR | ICR | Review Load |",
             "|---|---|---|---|---|---|---|---|",
@@ -776,6 +776,7 @@ def generate_table_ix(
             m_row = h_sub[h_sub["model"] == m]
             if len(m_row) > 0:
                 st = m_row.iloc[0]["status"]
+                st = "n/a" if pd.isna(st) else st
                 det = m_row.iloc[0]["details"]
                 status_parts.append(f"{m}: {st}")
                 details_parts.append(f"{m}: {det}")
@@ -1021,9 +1022,9 @@ def run_all_tables(
     if selected_table in ("all", "IV") and results_test_file.is_file() and results_controls_file.is_file():
         generate_table_iv(pd.read_csv(results_test_file), pd.read_csv(results_controls_file), best_signals, out_p, cfg, allow_mock=allow_mock)
         generate_table_iv_c(pd.read_csv(results_test_file), best_signals, out_p, cfg, allow_mock=allow_mock)
-        table_paths["table_IVa"] = reports_dir / "table_IVa_llama3.md"
-        if (reports_dir / "table_IVb_biomistral.md").is_file():
-            table_paths["table_IVb"] = reports_dir / "table_IVb_biomistral.md"
+        for iv_file in sorted(reports_dir.glob("table_IV*_*.md")):
+            key = {"table_IVa_llama3": "table_IVa", "table_IVb_biomistral": "table_IVb"}.get(iv_file.stem, iv_file.stem)
+            table_paths[key] = iv_file
         table_paths["table_IVc"] = reports_dir / "table_IVc.md"
 
     # Table V

@@ -53,7 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_selfcheck.add_argument("--config", default="configs/c1.yaml", help="Path to config")
     p_selfcheck.add_argument("--out", default=None, help="Output run directory")
-    p_selfcheck.add_argument("--model", required=False, default="llama3", help="Model to check (llama3 or biomistral)")
+    p_selfcheck.add_argument("--model", required=False, default="llama3", help="Model to check (a key of config.models)")
     p_selfcheck.add_argument("--backend", choices=["hf", "mock"], default="hf", help="Backend type (default: hf)")
 
     p_estimate = subparsers.add_parser(
@@ -72,7 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_run.add_argument("--config", default="configs/c1.yaml", help="Path to config")
     p_run.add_argument("--out", default=None, help="Output run directory")
-    p_run.add_argument("--model", required=False, default="llama3", help="Model name (llama3 or biomistral)")
+    p_run.add_argument("--model", required=False, default="llama3", help="Model name (a key of config.models)")
     p_run.add_argument("--backend", choices=["hf", "mock"], default="hf", help="Backend type (default: hf)")
     p_run.add_argument("--stages", default="greedy,samples,s2,s4", help="Comma-separated stage list")
     p_run.add_argument("--split", default=None, help="Optional split filter (e.g. dev)")
@@ -85,7 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_build_codes.add_argument("--config", default="configs/c1.yaml", help="Path to config")
     p_build_codes.add_argument("--out", default=None, help="Output run directory")
-    p_build_codes.add_argument("--model", required=False, default="llama3", help="Model name (llama3 or biomistral)")
+    p_build_codes.add_argument("--model", required=False, default="llama3", help="Model name (a key of config.models)")
     p_build_codes.add_argument("--backend", choices=["hf", "mock"], default="hf", help="Backend type (default: hf)")
 
     # Milestone M4 / M5 commands
@@ -149,7 +149,7 @@ def _create_backend(config: Any, model_name: str, backend_type: str, tokenizer_o
         model_id=model_cfg.hf_id,
         context_limit=model_cfg.context,
         quant_type=config.quantisation.type,
-        compute_dtype=config.quantisation.compute_dtype,
+        compute_dtype=model_cfg.compute_dtype or config.quantisation.compute_dtype,
         double_quant=config.quantisation.double_quant,
     )
     if tokenizer_only:
@@ -292,6 +292,22 @@ def run_build_codes_cli(args: argparse.Namespace) -> int:
     from c1.utils import load_config, write_run_meta
 
     config = load_config(args.config)
+    if args.model == "all":
+        # Every configured model that has greedy output in the run folder.
+        from c1.utils import read_jsonl_resume
+
+        run_dir = Path(args.out) if args.out else Path(config.paths.out_dir) / config.run_id
+        done = {r.get("model") for r in read_jsonl_resume(run_dir / "greedy.jsonl")}
+        found = [m for m in config.models if m in done]
+        if not found:
+            print(f"No model outputs found in {run_dir / 'greedy.jsonl'}.")
+            return 1
+        for m in found:
+            args.model = m
+            ret = run_build_codes_cli(args)
+            if ret != 0:
+                return ret
+        return 0
     model_name = args.model or "llama3"
     backend = _create_backend(config, model_name, args.backend, tokenizer_only=True)  # S3 decode needs only the tokenizer
 

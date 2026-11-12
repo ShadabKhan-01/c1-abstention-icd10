@@ -400,18 +400,14 @@ class HFBackend(BaseBackend):
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
-        # Setup EOS tokens including LLaMA-3 <|eot_id|>
+        # Stop tokens: EOS plus each chat format's end-of-turn token when the tokenizer
+        # has it (LLaMA-3/Med42 <|eot_id|>, Qwen <|im_end|>, Gemma <end_of_turn>).
         eos_ids = [self.tokenizer.eos_token_id]
-        try:
-            eot_id = self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
-            if (
-                eot_id is not None
-                and eot_id != self.tokenizer.unk_token_id
-                and eot_id not in eos_ids
-            ):
-                eos_ids.append(eot_id)
-        except Exception:
-            pass
+        vocab = self.tokenizer.get_vocab()
+        for turn_end in ("<|eot_id|>", "<|im_end|>", "<end_of_turn>"):
+            turn_id = vocab.get(turn_end)
+            if turn_id is not None and turn_id not in eos_ids:
+                eos_ids.append(turn_id)
         self._eos_token_ids = eos_ids
 
         # Determine compute dtype

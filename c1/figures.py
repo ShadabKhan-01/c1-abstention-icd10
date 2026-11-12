@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from c1.utils import Config
+from c1.utils import Config, model_display_name
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +67,7 @@ def generate_fig1_risk_coverage(
     out_dir: Path,
     allow_mock: bool = False,
     signals: Sequence[str] = ("s1", "s2", "s3", "s4", "s5"),
+    config: Config | None = None,
 ) -> Path:
     """Generate Fig. 1: Risk–coverage curves per model per SPEC §14."""
     test_df = codes_df[codes_df["split"] == "test"].copy()
@@ -139,7 +140,7 @@ def generate_fig1_risk_coverage(
             color = SIGNAL_COLORS.get(sig, "gray")
             ax.plot(covs, risks, label=label, color=color, linewidth=2.0)
 
-        model_title = "LLaMA-3-8B-Instruct" if "llama" in m.lower() else ("BioMistral-7B" if "biomistral" in m.lower() else m)
+        model_title = model_display_name(config, m)
         if allow_mock:
             model_title += " [MOCK]"
             _apply_mock_watermark(ax)
@@ -165,6 +166,7 @@ def generate_fig2_reliability(
     allow_mock: bool = False,
     n_bins: int = 10,
     signals: Sequence[str] = ("s2", "s3", "s4"),
+    config: Config | None = None,
 ) -> Path:
     """Generate Fig. 2: Reliability diagram for probability signals (S2, S3, S4) per SPEC §14."""
     test_df = codes_df[codes_df["split"] == "test"].copy()
@@ -214,7 +216,7 @@ def generate_fig2_reliability(
             color = SIGNAL_COLORS.get(sig, "gray")
             ax.plot(mean_confs, accuracies, marker="o", markersize=5, label=label, color=color, linewidth=2.0)
 
-        model_title = "LLaMA-3-8B-Instruct" if "llama" in m.lower() else ("BioMistral-7B" if "biomistral" in m.lower() else m)
+        model_title = model_display_name(config, m)
         if allow_mock:
             model_title += " [MOCK]"
             _apply_mock_watermark(ax)
@@ -278,7 +280,7 @@ def run_all_figures(
     codes_df = pd.read_csv(codes_file)
     n_bins = config.ece_bins if config else 10
 
-    f1 = generate_fig1_risk_coverage(codes_df, out_p, allow_mock=allow_mock)
-    f2 = generate_fig2_reliability(codes_df, out_p, allow_mock=allow_mock, n_bins=n_bins)
+    f1 = generate_fig1_risk_coverage(codes_df, out_p, allow_mock=allow_mock, config=config)
+    f2 = generate_fig2_reliability(codes_df, out_p, allow_mock=allow_mock, n_bins=n_bins, config=config)
 
     return {"fig1": f1, "fig2": f2}

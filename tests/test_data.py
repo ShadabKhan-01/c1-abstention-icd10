@@ -259,7 +259,7 @@ def test_generate_table_ii(valid_notes: list[Note], tmp_path: Path) -> None:
     # Check Markdown
     assert "# Table II: Clinical Corpus and Prediction Statistics" in md_str
     assert "| Notes (dev/test) | 3 | 7 | 10 |" in md_str
-    assert "Mean predicted codes / note (LLaMA-3-8B-Instruct)" in md_str
+    assert "Mean predicted codes / note (llama3)" in md_str
     assert "| — | — | — |" in md_str
     assert "*Footnote: Split sizes: Dev 3 notes, Test 7 notes." in md_str
 

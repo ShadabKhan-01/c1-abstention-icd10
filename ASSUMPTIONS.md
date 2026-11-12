@@ -30,3 +30,8 @@ This document records ambiguities in the paper and the defaults adopted, as spec
 | A24 | Tables and figures mock data mixing guard | Mock outputs and `outputs_mock` path rejected in production mode; allowed with `--allow-mock` which stamps `MOCK DATA` on markdown, CSV, and PNG reports (SPEC §14, §15, AGENTS.md §2) |
 | A25 | Sanity report prerequisite | `tables` and `figures` require `sanity_report.json` with `passed == true` before generating reports (SPEC §15) |
 | A26 | Thin Colab notebooks | Notebooks contain zero data/metric processing logic; cells exclusively mount Drive, clone repo, set secrets, and invoke CLI commands (AGENTS.md §3, SPEC §16) |
+| A27 | Model set (author decision, deviates from the paper draft and AGENTS.md §1.4) | Run Qwen2.5-7B-Instruct, BioMistral-7B, Llama3-Med42-8B and Gemma-2-9B-it; LLaMA-3-8B-Instruct stays in the config but is not run. The paper text and tables must be updated to name these models |
+| A28 | Code parsing (deviates from the original SPEC §5.2 start-of-line rule) | Every well-formed code anywhere in a line is taken, because models write `Gout (M10.0)`. Exception: a 3-character code without a dot directly after a word (`Vitamin B12`) is text, not a code. Codes are still never repaired. First BioMistral run under the old rule: 187/300 notes parsed no code |
+| A29 | S2 line fallback | If a line is not `CODE, SCORE`, the first greedy code in the line is scored by the last number after it (`/100` and `out of 100` ignored) |
+| A30 | Gemma-2 compute dtype | `bfloat16` (per-model `compute_dtype` override); Gemma-2 is numerically unstable in float16. Other models use float16 |
+| A31 | Run id | Results of the four-model study live in `c1_run02`; `c1_run01` (old parser) is not used for any table |

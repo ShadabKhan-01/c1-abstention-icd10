@@ -1,10 +1,16 @@
-run_id: c1_run01
+run_id: c1_run02
 paths: {data_dir: data, out_dir: outputs}        # out_dir will point to Google Drive on Colab
 corpus: {n_notes: 300, generator_seed: 2026}
 split: {dev_fraction: 0.30, seed: 2026}
 models:
-  llama3: {hf_id: meta-llama/Meta-Llama-3-8B-Instruct, context: 8192}
-  biomistral: {hf_id: BioMistral/BioMistral-7B, context: 2048}
+  # Models of this study (one Colab session each).
+  qwen: {hf_id: Qwen/Qwen2.5-7B-Instruct, context: 32768, display: Qwen2.5-7B-Instruct}
+  biomistral: {hf_id: BioMistral/BioMistral-7B, context: 2048, display: BioMistral-7B}
+  med42: {hf_id: m42-health/Llama3-Med42-8B, context: 8192, display: Llama3-Med42-8B}
+  # Gemma-2 is numerically unstable in float16, so it computes in bfloat16.
+  gemma: {hf_id: google/gemma-2-9b-it, context: 8192, display: Gemma-2-9B-it, compute_dtype: bfloat16}
+  # Kept for the paper's original design; not run in this study.
+  llama3: {hf_id: meta-llama/Meta-Llama-3-8B-Instruct, context: 8192, display: LLaMA-3-8B-Instruct}
 quantisation: {type: nf4, compute_dtype: float16, double_quant: true}
 decoding:
   greedy: {do_sample: false, max_new_tokens: 200}

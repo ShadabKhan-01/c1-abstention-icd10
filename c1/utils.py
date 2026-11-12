@@ -97,6 +97,15 @@ class ModelConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     hf_id: str
     context: int
+    display: str | None = None  # name printed in tables/figures (default: the config key)
+    compute_dtype: str | None = None  # per-model override of quantisation.compute_dtype
+
+
+def model_display_name(config: "Config | None", model_key: str) -> str:
+    """Human-readable model name for table and figure titles."""
+    if config is not None and model_key in config.models and config.models[model_key].display:
+        return str(config.models[model_key].display)
+    return model_key
 
 
 class QuantisationConfig(BaseModel):
